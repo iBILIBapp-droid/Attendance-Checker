@@ -261,7 +261,7 @@ async function onStudentScan(qrData) {
     if (!parts[0] || parts[0].trim().toUpperCase() !== 'STUDENT') { scanLock = false; return; }
     const [_, id, name] = parts;
     setStatus('studentStatus', 'info', 'PROCESSING...', 'Please wait');
-    await recordAttendance('student', id.trim(), name ? name.trim() : id.trim(), 'studentStatus');
+    await recordAttendance('student', id.trim(), name ? name.trim() : id.trim(), studentScanMode, 'studentStatus');
     setTimeout(() => { scanLock = false; }, 2000);
 }
 
@@ -483,7 +483,7 @@ async function onAdminScan(qrData) {
     const [_, id, name] = parts;
     const personType = type.toLowerCase();
     setStatus('adminScanStatus', 'info', 'PROCESSING...', 'Please wait');
-    await recordAttendance(personType, id.trim(), name ? name.trim() : id.trim(), 'adminScanStatus');
+    await recordAttendance(personType, id.trim(), name ? name.trim() : id.trim(), adminScanMode, 'adminScanStatus');
     setTimeout(() => { scanLock = false; }, 2000);
 }
 
