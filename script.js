@@ -193,6 +193,7 @@ async function handleLogin(qrData) {
     } else if (currentUser.type === 'teacher') {
         document.getElementById('teacherBadge').innerHTML = `${currentUser.name}<br><span style="font-size:9px;opacity:0.7">TEACHER</span>`;
         showScreen('teacher');
+        await startTeacherScanner();
         loadTeacherOwnTime();
     } else if (currentUser.type === 'admin') {
         document.getElementById('adminBadge').innerHTML = `${currentUser.name}<br><span style="font-size:9px;opacity:0.7">ADMIN</span>`;
@@ -261,7 +262,7 @@ async function onStudentScan(qrData) {
     if (!parts[0] || parts[0].trim().toUpperCase() !== 'STUDENT') { scanLock = false; return; }
     const [_, id, name] = parts;
     setStatus('studentStatus', 'info', 'PROCESSING...', 'Please wait');
-    await recordAttendance('student', id.trim(), name ? name.trim() : id.trim(), studentScanMode, 'studentStatus');
+    await recordAttendance('student', id.trim(), name ? name.trim() : id.trim(), 'studentStatus');
     setTimeout(() => { scanLock = false; }, 2000);
 }
 
@@ -270,85 +271,83 @@ async function showStudentActionPage(id, name) {
     loginScanner = await stopScanner(loginScanner);
 
     const hour = new Date().getHours();
-    document.getElementById('actionGreeting').textContent = hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening';
+    const greeting = hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening';
+    document.getElementById('actionGreeting').textContent = greeting;
     document.getElementById('actionName').textContent = name;
-    document.getElementById('actionLRN').textContent  = 'LRN: ' + id;
+    document.getElementById('actionLRN').textContent = 'LRN: ' + id;
 
     if (clockInterval) clearInterval(clockInterval);
     function updateClock() {
-        const now  = new Date();
-        const mins = now.getHours() * 60 + now.getMinutes();
-        const h    = now.getHours();
+        const now = new Date();
         document.getElementById('actionClock').textContent =
             now.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
         document.getElementById('actionDate').textContent =
             now.toLocaleDateString('en-PH', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
-        // TIME IN preview
-        let inLabel = mins <= 7*60+34 ? 'Will be: ON TIME' : mins < 12*60 ? 'Will be: LATE' : 'Will be: HALF DAY';
-        // TIME OUT preview: 12:00–3:59 = Half Day, 4:00 PM+ = Full Day
-        let outLabel = (h >= 12 && h < 16) ? 'Will mark: HALF DAY' : h >= 16 ? 'Will mark: FULL DAY' : 'Time in first';
-
-        const inSub  = document.getElementById('actionBtnInStatus');
-        const outSub = document.getElementById('actionBtnOutStatus');
-        if (inSub)  inSub.textContent  = inLabel;
-        if (outSub) outSub.textContent = outLabel;
+        // Update status preview on the button
+        const status = getAttendanceStatus(now);
+        const colors = { 'On Time': '#1B6B38', 'Late': '#C8102E', 'Half Day': '#E65100' };
+        const subEl = document.getElementById('actionBtnStatus');
+        if (subEl) {
+            subEl.textContent = 'Will be marked: ' + status.toUpperCase();
+            subEl.style.color = 'rgba(255,255,255,0.75)';
+        }
     }
     updateClock();
     clockInterval = setInterval(updateClock, 1000);
 
+    // Check if already recorded today
     const today = todayDate();
     const { data: existing } = await db.from('attendance_logs')
         .select('*').eq('lrn', id).eq('date', today).eq('person_type', 'student').maybeSingle();
 
-    const recEl  = document.getElementById('actionTodayRecord');
-    const btnIn  = document.getElementById('actionBtnIn');
-    const btnOut = document.getElementById('actionBtnOut');
-
+    const recEl = document.getElementById('actionTodayRecord');
+    const btnIn = document.getElementById('actionBtnIn');
     if (existing) {
-        document.getElementById('actionTodayIn').textContent  = (existing.time_in  || '---') + ' (' + existing.status + ')';
-        document.getElementById('actionTodayOut').textContent = existing.time_out || '---';
+        document.getElementById('actionTodayIn').textContent = existing.time_in || '—';
         recEl.classList.remove('hidden');
-        if (existing.time_in)  { btnIn.classList.add('action-btn-done');  btnIn.disabled  = true; }
-        if (existing.time_out) { btnOut.classList.add('action-btn-done'); btnOut.disabled = true; }
+        btnIn.classList.add('action-btn-done');
+        btnIn.disabled = true;
+        const subEl = document.getElementById('actionBtnStatus');
+        if (subEl) { subEl.textContent = 'ALREADY RECORDED — ' + existing.status; }
     } else {
         recEl.classList.add('hidden');
-        btnIn.classList.remove('action-btn-done');  btnIn.disabled  = false;
-        btnOut.classList.remove('action-btn-done'); btnOut.disabled = false;
+        btnIn.classList.remove('action-btn-done');
+        btnIn.disabled = false;
     }
 
     document.getElementById('actionMsg').style.display = 'none';
     showScreen('student-action');
 }
 
+
 async function studentAction(mode) {
-    const id    = currentUser.id;
-    const name  = currentUser.name;
+    const id     = currentUser.id;
+    const name   = currentUser.name;
     const btnIn  = document.getElementById('actionBtnIn');
     const btnOut = document.getElementById('actionBtnOut');
     const msgEl  = document.getElementById('actionMsg');
-
-    btnIn.disabled  = true;
+    btnIn.disabled = true;
     btnOut.disabled = true;
     msgEl.style.display = 'none';
-
-    const success = await recordAttendance('student', id, name, mode, 'actionMsg');
+    await recordAttendance('student', id, name, mode, 'actionMsg');
     msgEl.style.display = 'flex';
-
-    // Refresh today record
     const today = todayDate();
-    const { data: updated } = await db.from('attendance_logs')
+    const { data: rec } = await db.from('attendance_logs')
         .select('*').eq('lrn', id).eq('date', today).eq('person_type', 'student').maybeSingle();
-    if (updated) {
-        document.getElementById('actionTodayIn').textContent  = (updated.time_in  || '---') + ' (' + updated.status + ')';
-        document.getElementById('actionTodayOut').textContent = updated.time_out || '---';
+    if (rec) {
+        document.getElementById('actionTodayIn').textContent  = rec.time_in  ? rec.time_in + ' (' + rec.status + ')' : '—';
+        document.getElementById('actionTodayOut').textContent = rec.time_out || '—';
         document.getElementById('actionTodayRecord').classList.remove('hidden');
-        if (updated.time_in)  { btnIn.classList.add('action-btn-done');  btnIn.disabled  = true; }
-        if (updated.time_out) { btnOut.classList.add('action-btn-done'); btnOut.disabled = true; }
+        if (rec.time_in)  { btnIn.classList.add('action-btn-done');  btnIn.disabled  = true; }
+        else              { btnIn.classList.remove('action-btn-done'); btnIn.disabled = false; }
+        if (rec.time_out) { btnOut.classList.add('action-btn-done'); btnOut.disabled = true; }
+        else              { btnOut.classList.remove('action-btn-done'); btnOut.disabled = false; }
+    } else {
+        btnIn.disabled = false;
+        btnOut.disabled = false;
     }
-
-    if (success) setTimeout(() => goBackToScan(), 3000);
-    else         setTimeout(() => goBackToScan(), 3000);
+    setTimeout(() => goBackToScan(), 3000);
 }
 
 
@@ -367,7 +366,31 @@ function goBackToScan() {
 // ══════════════════════════════════════════════
 //  TEACHER SCREEN
 // ══════════════════════════════════════════════
+let teacherScanMode = 'IN';
+
+function setTeacherScanMode(mode) {
+    teacherScanMode = mode;
+    document.getElementById('tchModeIn').classList.toggle('active', mode === 'IN');
+    document.getElementById('tchModeOut').classList.toggle('active', mode === 'OUT');
+}
+
+async function startTeacherScanner() {
+    await startQrScanner('teacher-reader', onTeacherScan);
+}
+
+async function onTeacherScan(qrData) {
+    if (scanLock) return;
+    scanLock = true;
+    const parts = qrData.trim().split('|');
+    if (!parts[0] || parts[0].trim().toUpperCase() !== 'STUDENT') { scanLock = false; return; }
+    const [_, id, name] = parts;
+    setStatus('teacherScanStatus', 'info', 'PROCESSING...', 'Please wait');
+    await recordAttendance('student', id.trim(), name ? name.trim() : id.trim(), 'teacherScanStatus');
+    setTimeout(() => { scanLock = false; }, 2000);
+}
+
 async function startTeacherScannerIfNeeded(tabId) {
+    if (tabId === 'teacherScanTab') await startTeacherScanner();
     if (tabId === 'teacherLogsTab') loadLogs('teacher');
     if (tabId === 'teacherTimeTab') loadTeacherOwnTime();
 }
@@ -483,7 +506,7 @@ async function onAdminScan(qrData) {
     const [_, id, name] = parts;
     const personType = type.toLowerCase();
     setStatus('adminScanStatus', 'info', 'PROCESSING...', 'Please wait');
-    await recordAttendance(personType, id.trim(), name ? name.trim() : id.trim(), adminScanMode, 'adminScanStatus');
+    await recordAttendance(personType, id.trim(), name ? name.trim() : id.trim(), 'adminScanStatus');
     setTimeout(() => { scanLock = false; }, 2000);
 }
 
@@ -593,11 +616,10 @@ async function exportCSV() {
 // ══════════════════════════════════════════════
 //  CORE: RECORD ATTENDANCE
 // ══════════════════════════════════════════════
-async function recordAttendance(personType, lrn, name, mode, statusElId) {
+async function recordAttendance(personType, lrn, name, statusElId) {
     const now  = new Date();
     const date = now.toISOString().split('T')[0];
     const time = nowTime();
-    const mins = now.getHours() * 60 + now.getMinutes();
 
     try {
         const { data: existing, error: fetchErr } = await db
@@ -606,56 +628,22 @@ async function recordAttendance(personType, lrn, name, mode, statusElId) {
             .maybeSingle();
         if (fetchErr) throw fetchErr;
 
-        if (mode === 'IN') {
-            if (existing) {
-                setStatus(statusElId, 'warning', 'ALREADY TIMED IN',
-                    `${name} checked in at ${existing.time_in} — ${existing.status}`);
-                return false;
-            }
-            // TIME IN status rules:
-            // On Time  : 7:34 and earlier
-            // Late     : 7:35 – 11:59
-            // Half Day : 12:00 PM and later
-            let status;
-            if (mins <= 7*60+34)  status = 'On Time';
-            else if (mins < 12*60) status = 'Late';
-            else                   status = 'Half Day';
-
-            const { error: insErr } = await db.from('attendance_logs').insert({
-                lrn, full_name: name, date, time_in: time, status, person_type: personType
-            });
-            if (insErr) throw insErr;
-            setStatus(statusElId, 'success', `TIME IN — ${status}`, `${name} at ${time}`);
-            flashSuccess(); showToast(`✓ ${name} — ${status}`);
-            return true;
-
-        } else {
-            // TIME OUT
-            if (!existing) {
-                setStatus(statusElId, 'error', 'NO TIME IN RECORD', `${name} hasn't timed in today.`);
-                return false;
-            }
-            if (existing.time_out) {
-                setStatus(statusElId, 'warning', 'ALREADY TIMED OUT', `${name} left at ${existing.time_out}`);
-                return false;
-            }
-            // TIME OUT status rules:
-            // If time out is between 12:00 and before 4:00 PM → Half Day
-            // If time out is 4:00 PM or later → keep original time-in status (Full day)
-            const h = now.getHours();
-            let updatedStatus = existing.status; // keep original by default
-            if (h >= 12 && h < 16) {
-                updatedStatus = 'Half Day'; // timed out before 4PM = half day
-            }
-
-            const { error: updErr } = await db.from('attendance_logs')
-                .update({ time_out: time, status: updatedStatus })
-                .eq('id', existing.id);
-            if (updErr) throw updErr;
-            setStatus(statusElId, 'success', `TIME OUT — ${updatedStatus}`, `${name} at ${time}`);
-            flashSuccess(); showToast(`✓ ${name} timed out`);
-            return true;
+        if (existing) {
+            setStatus(statusElId, 'warning', 'ALREADY RECORDED',
+                `${name} — ${existing.status} at ${existing.time_in}`);
+            return false;
         }
+
+        const status = getAttendanceStatus(now);
+        const { error: insErr } = await db.from('attendance_logs').insert({
+            lrn, full_name: name, date, time_in: time, status, person_type: personType
+        });
+        if (insErr) throw insErr;
+
+        setStatus(statusElId, 'success', `TIME IN — ${status}`, `${name} at ${time}`);
+        flashSuccess();
+        showToast(`✓ ${name} — ${status}`);
+        return true;
     } catch (e) {
         setStatus(statusElId, 'error', 'DATABASE ERROR', e.message || 'Unknown error');
         console.error(e);
