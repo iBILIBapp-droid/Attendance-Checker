@@ -2,67 +2,203 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PRESENCE — Smart Attendance</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>PRESENCE — Aringay NHS</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;700;900&family=Bebas+Neue&family=Noto+Sans+JP:wght@300;400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Noto+Sans+JP:wght@300;400;500;700&family=Noto+Serif+JP:wght@700;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<div class="container">
 
-    <!-- LOGIN SCREEN -->
-    <div id="initialScanScreen" class="main-card">
-        <div class="header">
-            <h1>PRESENCE</h1>
-            <p>Aringay National High School</p>
-            <p>Smart Attendance System</p>
+<!-- ═══════════════════════════════════════════
+     SCREEN 1: LOGIN (QR Scan to identify user)
+════════════════════════════════════════════ -->
+<div id="screen-login" class="screen active">
+    <div class="login-wrap">
+        <div class="login-hero">
+            <div class="kanji-bg">出席</div>
+            <div class="login-brand">
+                <span class="brand-dot"></span>
+                <h1>PRESENCE</h1>
+                <span class="brand-dot"></span>
+            </div>
+            <p class="login-school">Aringay National High School</p>
+            <p class="login-sub">Smart Attendance System</p>
         </div>
 
-        <div id="initialReader"></div>
-
-        <button id="startScanBtn">📷 &nbsp;Scan ID to Login</button>
-
-        <div id="loginStatus" class="status-display info">
-            <h3>Ready</h3>
-            <p>Press the button above to activate the camera</p>
-        </div>
-    </div>
-
-    <!-- MAIN APP -->
-    <div id="mainApp" class="hidden">
-        <div class="main-card">
-            <div class="header">
-                <h1>🎓 PRESENCE</h1>
-                <p>Aringay National High School</p>
-                <p id="userInfo"></p>
-            </div>
-
-            <div class="tab-navigation" id="tabNavigation"></div>
-
-            <div id="scanTab" class="tab-content active">
-                <div class="mode-toggle">
-                    <button class="mode-btn time-in active" id="modeInBtn">⏰ Time In</button>
-                    <button class="mode-btn time-out" id="modeOutBtn">🏃 Time Out</button>
-                </div>
-                <div id="reader"></div>
-                <div id="statusDisplay" class="status-display info">
-                    <h3>Ready to Scan</h3>
-                    <p>Point camera at student QR code</p>
-                </div>
-            </div>
-
-            <div id="studentsTab" class="tab-content">
-                <div class="logs-section">
-                    <input type="date" id="studentDateFilter"/>
-                    <div id="studentLogsDisplay"></div>
-                </div>
+        <div class="login-card">
+            <div class="scanner-label">SCAN YOUR ID TO BEGIN</div>
+            <div id="login-reader" class="reader-box"></div>
+            <button id="loginScanBtn" class="btn-primary">
+                <span class="btn-icon">📷</span> ACTIVATE CAMERA
+            </button>
+            <div id="loginStatus" class="status-box info">
+                <span class="status-dot"></span>
+                <div><strong>SYSTEM READY</strong><p>Press button to scan your ID card</p></div>
             </div>
         </div>
     </div>
-
 </div>
+
+<!-- ═══════════════════════════════════════════
+     SCREEN 2: STUDENT — Just scan attendance
+════════════════════════════════════════════ -->
+<div id="screen-student" class="screen">
+    <div class="app-header">
+        <div class="app-header-inner">
+            <div>
+                <h2 class="app-title">PRESENCE</h2>
+                <p class="app-school">Aringay NHS</p>
+            </div>
+            <div class="user-badge" id="studentBadge"></div>
+            <button class="logout-btn" onclick="logout()">✕</button>
+        </div>
+    </div>
+    <div class="app-body">
+        <div class="mode-bar">
+            <button class="mode-btn active" id="stuModeIn" onclick="setStudentMode('IN')">⏰ TIME IN</button>
+            <button class="mode-btn" id="stuModeOut" onclick="setStudentMode('OUT')">🚶 TIME OUT</button>
+        </div>
+        <div id="student-reader" class="reader-box"></div>
+        <div id="studentStatus" class="status-box info">
+            <span class="status-dot"></span>
+            <div><strong>READY TO SCAN</strong><p>Point camera at student QR code</p></div>
+        </div>
+        <div class="scan-hint">Hold QR code steady inside the frame</div>
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     SCREEN 3: TEACHER — Scan + View Logs
+════════════════════════════════════════════ -->
+<div id="screen-teacher" class="screen">
+    <div class="app-header">
+        <div class="app-header-inner">
+            <div>
+                <h2 class="app-title">PRESENCE</h2>
+                <p class="app-school">Aringay NHS</p>
+            </div>
+            <div class="user-badge" id="teacherBadge"></div>
+            <button class="logout-btn" onclick="logout()">✕</button>
+        </div>
+    </div>
+    <nav class="tab-nav" id="teacherNav">
+        <button class="tab-btn active" data-tab="teacherScanTab">📷 SCAN</button>
+        <button class="tab-btn" data-tab="teacherTimeTab">🕐 MY TIME</button>
+        <button class="tab-btn" data-tab="teacherLogsTab">📋 LOGS</button>
+    </nav>
+    <div class="app-body">
+        <!-- Scan Tab -->
+        <div id="teacherScanTab" class="tab-pane active">
+            <div class="mode-bar">
+                <button class="mode-btn active" id="tchModeIn" onclick="setTeacherScanMode('IN')">⏰ TIME IN</button>
+                <button class="mode-btn" id="tchModeOut" onclick="setTeacherScanMode('OUT')">🚶 TIME OUT</button>
+            </div>
+            <div id="teacher-reader" class="reader-box"></div>
+            <div id="teacherScanStatus" class="status-box info">
+                <span class="status-dot"></span>
+                <div><strong>READY TO SCAN</strong><p>Point camera at student QR code</p></div>
+            </div>
+        </div>
+        <!-- My Time Tab -->
+        <div id="teacherTimeTab" class="tab-pane">
+            <div class="my-time-card">
+                <div class="my-time-label">TODAY'S ATTENDANCE</div>
+                <div id="teacherOwnTime" class="own-time-display">
+                    <div class="time-row"><span>Time In</span><strong id="tchTimeIn">—</strong></div>
+                    <div class="time-row"><span>Time Out</span><strong id="tchTimeOut">—</strong></div>
+                    <div class="time-row"><span>Status</span><strong id="tchStatus">—</strong></div>
+                </div>
+                <div class="own-time-btns">
+                    <button class="btn-primary" onclick="teacherSelfTimeIn()">⏰ RECORD TIME IN</button>
+                    <button class="btn-secondary" onclick="teacherSelfTimeOut()">🚶 RECORD TIME OUT</button>
+                </div>
+                <div id="teacherTimeMsg" class="status-box info" style="margin-top:15px;display:none;"></div>
+            </div>
+        </div>
+        <!-- Logs Tab -->
+        <div id="teacherLogsTab" class="tab-pane">
+            <div class="logs-toolbar">
+                <input type="date" id="teacherDateFilter" class="date-input"/>
+                <select id="teacherTypeFilter" class="type-select" onchange="loadLogs('teacher')">
+                    <option value="student">Students</option>
+                    <option value="teacher">Teachers</option>
+                </select>
+            </div>
+            <div id="teacherLogsDisplay" class="logs-list"></div>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     SCREEN 4: ADMIN — Full control
+════════════════════════════════════════════ -->
+<div id="screen-admin" class="screen">
+    <div class="app-header">
+        <div class="app-header-inner">
+            <div>
+                <h2 class="app-title">PRESENCE</h2>
+                <p class="app-school">Admin Panel</p>
+            </div>
+            <div class="user-badge" id="adminBadge"></div>
+            <button class="logout-btn" onclick="logout()">✕</button>
+        </div>
+    </div>
+    <nav class="tab-nav" id="adminNav">
+        <button class="tab-btn active" data-tab="adminScanTab">📷 SCAN</button>
+        <button class="tab-btn" data-tab="adminLogsTab">📋 LOGS</button>
+        <button class="tab-btn" data-tab="adminStatsTab">📊 STATS</button>
+        <button class="tab-btn" data-tab="adminStudentsTab">👥 PEOPLE</button>
+    </nav>
+    <div class="app-body">
+        <!-- Scan Tab -->
+        <div id="adminScanTab" class="tab-pane active">
+            <div class="mode-bar">
+                <button class="mode-btn active" id="admModeIn" onclick="setAdminScanMode('IN')">⏰ TIME IN</button>
+                <button class="mode-btn" id="admModeOut" onclick="setAdminScanMode('OUT')">🚶 TIME OUT</button>
+            </div>
+            <div id="admin-reader" class="reader-box"></div>
+            <div id="adminScanStatus" class="status-box info">
+                <span class="status-dot"></span>
+                <div><strong>READY TO SCAN</strong><p>Point camera at QR code</p></div>
+            </div>
+        </div>
+        <!-- Logs Tab -->
+        <div id="adminLogsTab" class="tab-pane">
+            <div class="logs-toolbar">
+                <input type="date" id="adminDateFilter" class="date-input"/>
+                <select id="adminTypeFilter" class="type-select" onchange="loadLogs('admin')">
+                    <option value="student">Students</option>
+                    <option value="teacher">Teachers</option>
+                </select>
+            </div>
+            <div class="export-bar">
+                <button class="btn-small" onclick="exportCSV()">⬇ Export CSV</button>
+            </div>
+            <div id="adminLogsDisplay" class="logs-list"></div>
+        </div>
+        <!-- Stats Tab -->
+        <div id="adminStatsTab" class="tab-pane">
+            <div id="statsDisplay" class="stats-grid"></div>
+        </div>
+        <!-- People Tab -->
+        <div id="adminStudentsTab" class="tab-pane">
+            <div class="people-toolbar">
+                <input type="text" id="peopleSearch" class="search-input" placeholder="Search by name or ID..." oninput="searchPeople()"/>
+                <select id="peopleTypeFilter" class="type-select" onchange="searchPeople()">
+                    <option value="student">Students</option>
+                    <option value="teacher">Teachers</option>
+                </select>
+            </div>
+            <div id="peopleDisplay" class="logs-list"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Toast notification -->
+<div id="toast" class="toast"></div>
+
 <script src="script.js"></script>
 </body>
 </html>

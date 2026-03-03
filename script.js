@@ -1,177 +1,497 @@
-const SUPABASE_URL = 'https://YOUR_PROJECT_ID.supabase.co';
-const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
-const sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// ═══════════════════════════════════════════════
+//  PRESENCE — Attendance System
+//  Replace YOUR_PROJECT_URL and YOUR_ANON_KEY
+//  with your actual Supabase credentials.
+// ═══════════════════════════════════════════════
+const SUPABASE_URL  = 'https://YOUR_PROJECT_URL.supabase.co';
+const SUPABASE_ANON = 'YOUR_ANON_KEY';
+const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
 
-let currentMode = 'IN';
-let userType, userLRN, userName;
-let attendanceScanner = null;
-let isProcessingScan = false;
-let loginScanner = null;
+// ── State ────────────────────────────────────
+let currentUser   = null; // { id, name, type: 'student'|'teacher'|'admin' }
+let loginScanner  = null;
+let activeScanner = null;
+let scanMode      = 'IN';   // current scan mode for active scanner
+let scanLock      = false;  // debounce
 
+// ── Boot ─────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
-    document.getElementById('startScanBtn').addEventListener('click', startInitialScanner);
-    document.getElementById('modeInBtn').addEventListener('click', () => setMode('IN'));
-    document.getElementById('modeOutBtn').addEventListener('click', () => setMode('OUT'));
-    document.getElementById('studentDateFilter').addEventListener('change', filterStudentLogs);
-    document.getElementById('studentDateFilter').value = new Date().toISOString().split('T')[0];
+    // Login button
+    document.getElementById('loginScanBtn').addEventListener('click', startLoginScanner);
+
+    // Teacher tabs
+    wireTabNav('teacherNav', startTeacherScannerIfNeeded);
+
+    // Admin tabs
+    wireTabNav('adminNav', startAdminScannerIfNeeded);
+
+    // Date filters — default to today
+    const today = todayDate();
+    ['teacherDateFilter','adminDateFilter'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) { el.value = today; el.addEventListener('change', () => loadLogs(id.includes('teacher') ? 'teacher' : 'admin')); }
+    });
 });
 
-async function startInitialScanner() {
-    const btn = document.getElementById('startScanBtn');
-    const status = document.getElementById('loginStatus');
+// ── Helpers ───────────────────────────────────
+function todayDate() { return new Date().toISOString().split('T')[0]; }
 
+function nowTime() {
+    return new Date().toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
+function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+function showScreen(name) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById('screen-' + name).classList.add('active');
+}
+
+function setStatus(elId, type, title, msg) {
+    const el = document.getElementById(elId);
+    if (!el) return;
+    el.className = 'status-box ' + type;
+    el.innerHTML = `<span class="status-dot"></span><div><strong>${title}</strong>${msg ? `<p>${msg}</p>` : ''}</div>`;
+    el.style.display = 'flex';
+}
+
+function wireTabNav(navId, onTabChange) {
+    const nav = document.getElementById(navId);
+    if (!nav) return;
+    nav.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            nav.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            const paneId = btn.dataset.tab;
+            const body = nav.closest('.screen').querySelector('.app-body');
+            body.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+            document.getElementById(paneId)?.classList.add('active');
+            onTabChange && onTabChange(paneId);
+        });
+    });
+}
+
+// ── Stop any running scanner ──────────────────
+async function stopScanner(ref) {
+    if (!ref) return null;
+    try { if (ref.isScanning) await ref.stop(); } catch (_) {}
+    return null;
+}
+
+// ── LOGIN SCANNER ─────────────────────────────
+async function startLoginScanner() {
+    const btn    = document.getElementById('loginScanBtn');
+    const status = document.getElementById('loginStatus');
     btn.disabled = true;
-    btn.textContent = '⏳  Starting Camera...';
-    status.className = 'status-display info';
-    status.innerHTML = '<h3>Camera Starting</h3><p>Allow camera permission if prompted.</p>';
+    btn.textContent = '⏳ STARTING CAMERA...';
+    setStatus('loginStatus', 'info', 'CAMERA STARTING', 'Please allow camera permission if prompted.');
 
     try {
         await navigator.mediaDevices.getUserMedia({ video: true });
     } catch (err) {
-        status.className = 'status-display error';
-        status.innerHTML = '<h3>Permission Denied</h3><p>Please allow camera access in your browser settings, then refresh.</p>';
-        btn.disabled = false;
-        btn.textContent = '📷  Scan ID to Login';
+        setStatus('loginStatus', 'error', 'PERMISSION DENIED', 'Allow camera access in browser settings, then refresh.');
+        btn.disabled = false; btn.innerHTML = '<span class="btn-icon">📷</span> ACTIVATE CAMERA';
         return;
     }
 
-    loginScanner = new Html5Qrcode('initialReader');
+    const readerEl = document.getElementById('login-reader');
+    readerEl.innerHTML = '';
+    loginScanner = new Html5Qrcode('login-reader');
+
     try {
         await loginScanner.start(
             { facingMode: 'environment' },
             { fps: 10, qrbox: { width: 220, height: 220 } },
             async (text) => {
-                try { await loginScanner.stop(); loginScanner = null; } catch (_) {}
-                await identifyUser(text);
+                await stopScanner(loginScanner); loginScanner = null;
+                await handleLogin(text);
             },
             () => {}
         );
         btn.style.display = 'none';
-        status.className = 'status-display info';
-        status.innerHTML = '<h3>Camera Active</h3><p>Scan your ID card now</p>';
+        setStatus('loginStatus', 'info', 'CAMERA ACTIVE', 'Scan your ID card now');
     } catch (err) {
-        status.className = 'status-display error';
-        status.innerHTML = `<h3>Camera Error</h3><p>${err.message || err}</p>`;
-        btn.disabled = false;
-        btn.textContent = '📷  Scan ID to Login';
+        setStatus('loginStatus', 'error', 'CAMERA ERROR', err.message || String(err));
+        btn.disabled = false; btn.innerHTML = '<span class="btn-icon">📷</span> ACTIVATE CAMERA';
     }
 }
 
-async function identifyUser(qrData) {
-    const parts = qrData.split('|');
-    if (parts.length < 2) { alert('Invalid QR format.'); location.reload(); return; }
+// ── HANDLE LOGIN QR ───────────────────────────
+// QR format:  TYPE|ID|Full Name
+// TYPE = STUDENT, TEACHER, ADMIN
+async function handleLogin(qrData) {
+    const parts = qrData.trim().split('|');
+    if (parts.length < 2) {
+        setStatus('loginStatus', 'error', 'INVALID QR', 'Expected format: TYPE|ID|Name');
+        document.getElementById('loginScanBtn').style.display = 'flex';
+        document.getElementById('loginScanBtn').disabled = false;
+        document.getElementById('loginScanBtn').innerHTML = '<span class="btn-icon">📷</span> ACTIVATE CAMERA';
+        return;
+    }
     const [type, id, name] = parts;
-    userType = type.trim().toLowerCase();
-    userLRN = id.trim();
-    userName = name ? name.trim() : id.trim();
-    document.getElementById('initialScanScreen').classList.add('hidden');
-    document.getElementById('mainApp').classList.remove('hidden');
-    document.getElementById('userInfo').textContent = `Logged in as: ${userName} (${type.trim()})`;
-    setupTabs();
-    await startAttendanceScanner();
+    currentUser = { type: type.trim().toLowerCase(), id: id.trim(), name: name ? name.trim() : id.trim() };
+
+    if (currentUser.type === 'student') {
+        document.getElementById('studentBadge').innerHTML = `${currentUser.name}<br><span style="font-size:9px;opacity:0.7">STUDENT • ${currentUser.id}</span>`;
+        showScreen('student');
+        await startStudentScanner();
+    } else if (currentUser.type === 'teacher') {
+        document.getElementById('teacherBadge').innerHTML = `${currentUser.name}<br><span style="font-size:9px;opacity:0.7">TEACHER</span>`;
+        showScreen('teacher');
+        await startTeacherScanner();
+        loadTeacherOwnTime();
+    } else if (currentUser.type === 'admin') {
+        document.getElementById('adminBadge').innerHTML = `${currentUser.name}<br><span style="font-size:9px;opacity:0.7">ADMIN</span>`;
+        showScreen('admin');
+        await startAdminScanner();
+        loadStats();
+    } else {
+        setStatus('loginStatus', 'error', 'UNKNOWN ROLE', `"${type}" is not recognized.`);
+    }
 }
 
-async function startAttendanceScanner() {
-    if (attendanceScanner) {
-        try { await attendanceScanner.stop(); } catch (_) {}
-        attendanceScanner = null;
-    }
-    const readerEl = document.getElementById('reader');
-    if (!readerEl) return;
-    readerEl.innerHTML = '';
-    attendanceScanner = new Html5Qrcode('reader');
+// ── LOGOUT ────────────────────────────────────
+async function logout() {
+    activeScanner = await stopScanner(activeScanner);
+    currentUser = null; scanMode = 'IN'; scanLock = false;
+    // Reset login screen
+    const btn = document.getElementById('loginScanBtn');
+    btn.style.display = 'flex'; btn.disabled = false;
+    btn.innerHTML = '<span class="btn-icon">📷</span> ACTIVATE CAMERA';
+    document.getElementById('login-reader').innerHTML = '';
+    setStatus('loginStatus', 'info', 'SYSTEM READY', 'Press button to scan your ID card');
+    showScreen('login');
+}
+
+// ── GENERIC SCANNER START ─────────────────────
+async function startQrScanner(readerId, onScan) {
+    activeScanner = await stopScanner(activeScanner);
+    const el = document.getElementById(readerId);
+    if (!el) return;
+    el.innerHTML = '';
+    const scanner = new Html5Qrcode(readerId);
     try {
-        await attendanceScanner.start(
+        await scanner.start(
             { facingMode: 'environment' },
             { fps: 10, qrbox: { width: 220, height: 220 } },
-            onAttendanceScan,
+            onScan,
             () => {}
         );
+        activeScanner = scanner;
     } catch (err) {
-        const s = document.getElementById('statusDisplay');
-        s.className = 'status-display error';
-        s.innerHTML = `<h3>Camera Error</h3><p>${err.message || err}</p>`;
+        console.error('Scanner start error:', err);
     }
 }
 
-async function onAttendanceScan(qrData) {
-    if (isProcessingScan) return;
-    isProcessingScan = true;
-    const parts = qrData.split('|');
-    const statusBox = document.getElementById('statusDisplay');
-    if (!parts[0] || parts[0].trim().toUpperCase() !== 'STUDENT') { isProcessingScan = false; return; }
+// ══════════════════════════════════════════════
+//  STUDENT SCREEN
+// ══════════════════════════════════════════════
+let studentScanMode = 'IN';
+
+function setStudentMode(mode) {
+    studentScanMode = mode;
+    document.getElementById('stuModeIn').classList.toggle('active', mode === 'IN');
+    document.getElementById('stuModeOut').classList.toggle('active', mode === 'OUT');
+}
+
+async function startStudentScanner() {
+    await startQrScanner('student-reader', onStudentScan);
+}
+
+async function onStudentScan(qrData) {
+    if (scanLock) return;
+    scanLock = true;
+    const parts = qrData.trim().split('|');
+    if (!parts[0] || parts[0].trim().toUpperCase() !== 'STUDENT') { scanLock = false; return; }
     const [_, id, name] = parts;
-    const now = new Date();
-    const date = now.toISOString().split('T')[0];
-    const time = now.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    statusBox.className = 'status-display info';
-    statusBox.innerHTML = '<h3>Processing...</h3><p>Please wait</p>';
+    setStatus('studentStatus', 'info', 'PROCESSING...', 'Please wait');
+    await recordAttendance('student', id.trim(), name ? name.trim() : id.trim(), studentScanMode, 'studentStatus');
+    setTimeout(() => { scanLock = false; }, 3000);
+}
+
+// ══════════════════════════════════════════════
+//  TEACHER SCREEN
+// ══════════════════════════════════════════════
+let teacherScanMode = 'IN';
+
+function setTeacherScanMode(mode) {
+    teacherScanMode = mode;
+    document.getElementById('tchModeIn').classList.toggle('active', mode === 'IN');
+    document.getElementById('tchModeOut').classList.toggle('active', mode === 'OUT');
+}
+
+async function startTeacherScanner() {
+    await startQrScanner('teacher-reader', onTeacherScan);
+}
+
+async function onTeacherScan(qrData) {
+    if (scanLock) return;
+    scanLock = true;
+    const parts = qrData.trim().split('|');
+    if (!parts[0] || parts[0].trim().toUpperCase() !== 'STUDENT') { scanLock = false; return; }
+    const [_, id, name] = parts;
+    setStatus('teacherScanStatus', 'info', 'PROCESSING...', 'Please wait');
+    await recordAttendance('student', id.trim(), name ? name.trim() : id.trim(), teacherScanMode, 'teacherScanStatus');
+    setTimeout(() => { scanLock = false; }, 3000);
+}
+
+async function startTeacherScannerIfNeeded(tabId) {
+    if (tabId === 'teacherScanTab') await startTeacherScanner();
+    if (tabId === 'teacherLogsTab') loadLogs('teacher');
+    if (tabId === 'teacherTimeTab') loadTeacherOwnTime();
+}
+
+// Teacher logs
+async function loadLogs(role) {
+    const dateId   = role === 'teacher' ? 'teacherDateFilter' : 'adminDateFilter';
+    const typeId   = role === 'teacher' ? 'teacherTypeFilter' : 'adminTypeFilter';
+    const dispId   = role === 'teacher' ? 'teacherLogsDisplay' : 'adminLogsDisplay';
+    const date     = document.getElementById(dateId)?.value || todayDate();
+    const type     = document.getElementById(typeId)?.value || 'student';
+    const display  = document.getElementById(dispId);
+    if (!display) return;
+    display.innerHTML = '<div class="logs-empty">Loading...</div>';
+
+    const { data, error } = await db.from('attendance_logs')
+        .select('*').eq('date', date).eq('person_type', type)
+        .order('time_in', { ascending: false });
+
+    if (error) { display.innerHTML = `<div class="logs-empty">Error: ${error.message}</div>`; return; }
+    if (!data?.length) { display.innerHTML = '<div class="logs-empty">No records found for this date.</div>'; return; }
+
+    display.innerHTML = data.map(log => {
+        const statusClass = log.status === 'Late' ? 'late' : 'ontime';
+        return `<div class="log-item">
+            <div>
+                <span class="log-name">${log.full_name}</span>
+                <span class="log-meta">IN: ${log.time_in || '—'} &nbsp;|&nbsp; OUT: ${log.time_out || '—'} &nbsp;|&nbsp; ID: ${log.lrn}</span>
+            </div>
+            <span class="log-status ${statusClass}">${log.status}</span>
+        </div>`;
+    }).join('');
+}
+
+// Teacher's own time in/out
+async function loadTeacherOwnTime() {
+    if (!currentUser) return;
+    const today = todayDate();
+    const { data } = await db.from('attendance_logs')
+        .select('*').eq('lrn', currentUser.id).eq('date', today).eq('person_type', 'teacher').maybeSingle();
+    document.getElementById('tchTimeIn').textContent  = data?.time_in  || '—';
+    document.getElementById('tchTimeOut').textContent = data?.time_out || '—';
+    document.getElementById('tchStatus').textContent  = data?.status   || '—';
+}
+
+async function teacherSelfTimeIn() {
+    if (!currentUser) return;
+    const today = todayDate();
+    const { data: existing } = await db.from('attendance_logs')
+        .select('*').eq('lrn', currentUser.id).eq('date', today).eq('person_type', 'teacher').maybeSingle();
+    const msgEl = document.getElementById('teacherTimeMsg');
+    if (existing) {
+        setStatus('teacherTimeMsg', 'warning', 'ALREADY TIMED IN', `You checked in at ${existing.time_in}`);
+        msgEl.style.display = 'flex'; return;
+    }
+    const time = nowTime();
+    const status = new Date().getHours() >= 8 ? 'Late' : 'On Time';
+    const { error } = await db.from('attendance_logs').insert({
+        lrn: currentUser.id, full_name: currentUser.name,
+        date: today, time_in: time, status, person_type: 'teacher'
+    });
+    if (error) { setStatus('teacherTimeMsg', 'error', 'ERROR', error.message); msgEl.style.display = 'flex'; return; }
+    setStatus('teacherTimeMsg', 'success', `TIME IN — ${status}`, `Recorded at ${time}`);
+    msgEl.style.display = 'flex';
+    loadTeacherOwnTime();
+    showToast(`Time In recorded at ${time}`);
+}
+
+async function teacherSelfTimeOut() {
+    if (!currentUser) return;
+    const today = todayDate();
+    const { data: existing } = await db.from('attendance_logs')
+        .select('*').eq('lrn', currentUser.id).eq('date', today).eq('person_type', 'teacher').maybeSingle();
+    const msgEl = document.getElementById('teacherTimeMsg');
+    if (!existing) {
+        setStatus('teacherTimeMsg', 'error', 'NO TIME IN RECORD', 'Please time in first.');
+        msgEl.style.display = 'flex'; return;
+    }
+    if (existing.time_out) {
+        setStatus('teacherTimeMsg', 'warning', 'ALREADY TIMED OUT', `You left at ${existing.time_out}`);
+        msgEl.style.display = 'flex'; return;
+    }
+    const time = nowTime();
+    const { error } = await db.from('attendance_logs').update({ time_out: time }).eq('id', existing.id);
+    if (error) { setStatus('teacherTimeMsg', 'error', 'ERROR', error.message); msgEl.style.display = 'flex'; return; }
+    setStatus('teacherTimeMsg', 'success', 'TIME OUT RECORDED', `Recorded at ${time}`);
+    msgEl.style.display = 'flex';
+    loadTeacherOwnTime();
+    showToast(`Time Out recorded at ${time}`);
+}
+
+// ══════════════════════════════════════════════
+//  ADMIN SCREEN
+// ══════════════════════════════════════════════
+let adminScanMode = 'IN';
+
+function setAdminScanMode(mode) {
+    adminScanMode = mode;
+    document.getElementById('admModeIn').classList.toggle('active', mode === 'IN');
+    document.getElementById('admModeOut').classList.toggle('active', mode === 'OUT');
+}
+
+async function startAdminScanner() {
+    await startQrScanner('admin-reader', onAdminScan);
+}
+
+async function onAdminScan(qrData) {
+    if (scanLock) return;
+    scanLock = true;
+    const parts = qrData.trim().split('|');
+    const type = parts[0]?.trim().toUpperCase();
+    if (type !== 'STUDENT' && type !== 'TEACHER') { scanLock = false; return; }
+    const [_, id, name] = parts;
+    const personType = type.toLowerCase();
+    setStatus('adminScanStatus', 'info', 'PROCESSING...', 'Please wait');
+    await recordAttendance(personType, id.trim(), name ? name.trim() : id.trim(), adminScanMode, 'adminScanStatus');
+    setTimeout(() => { scanLock = false; }, 3000);
+}
+
+async function startAdminScannerIfNeeded(tabId) {
+    if (tabId === 'adminScanTab')     await startAdminScanner();
+    if (tabId === 'adminLogsTab')     loadLogs('admin');
+    if (tabId === 'adminStatsTab')    loadStats();
+    if (tabId === 'adminStudentsTab') searchPeople();
+}
+
+// Stats
+async function loadStats() {
+    const today = todayDate();
+    const el = document.getElementById('statsDisplay');
+    if (!el) return;
+    el.innerHTML = '<div style="padding:20px;color:#888;font-size:13px;">Loading stats...</div>';
+
+    const [stuToday, tchToday, stuLate, stuAll] = await Promise.all([
+        db.from('attendance_logs').select('id', { count: 'exact' }).eq('date', today).eq('person_type', 'student'),
+        db.from('attendance_logs').select('id', { count: 'exact' }).eq('date', today).eq('person_type', 'teacher'),
+        db.from('attendance_logs').select('id', { count: 'exact' }).eq('date', today).eq('person_type', 'student').eq('status', 'Late'),
+        db.from('attendance_logs').select('id', { count: 'exact' }).eq('person_type', 'student'),
+    ]);
+
+    el.innerHTML = `
+        <div class="stat-card highlight">
+            <div class="stat-label">Students Present Today</div>
+            <div class="stat-value">${stuToday.count ?? 0}</div>
+        </div>
+        <div class="stat-card highlight">
+            <div class="stat-label">Teachers Present Today</div>
+            <div class="stat-value">${tchToday.count ?? 0}</div>
+        </div>
+        <div class="stat-card warn">
+            <div class="stat-label">Late Students Today</div>
+            <div class="stat-value">${stuLate.count ?? 0}</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Total Records (All Time)</div>
+            <div class="stat-value">${stuAll.count ?? 0}</div>
+            <div class="stat-sub">Student attendance entries</div>
+        </div>
+    `;
+}
+
+// People search
+async function searchPeople() {
+    const query  = document.getElementById('peopleSearch')?.value.toLowerCase() || '';
+    const type   = document.getElementById('peopleTypeFilter')?.value || 'student';
+    const display = document.getElementById('peopleDisplay');
+    if (!display) return;
+    display.innerHTML = '<div class="logs-empty">Searching...</div>';
+
+    let req = db.from('attendance_logs').select('lrn, full_name, person_type').eq('person_type', type);
+    const { data, error } = await req;
+    if (error) { display.innerHTML = `<div class="logs-empty">Error: ${error.message}</div>`; return; }
+
+    // Deduplicate by lrn
+    const seen = new Set();
+    const people = (data || []).filter(r => {
+        if (seen.has(r.lrn)) return false;
+        seen.add(r.lrn); return true;
+    }).filter(r => !query || r.full_name?.toLowerCase().includes(query) || r.lrn?.toLowerCase().includes(query));
+
+    if (!people.length) { display.innerHTML = '<div class="logs-empty">No records found.</div>'; return; }
+    display.innerHTML = people.map(p => `
+        <div class="person-item">
+            <div class="person-name">${p.full_name}</div>
+            <div class="person-meta">ID: ${p.lrn} &nbsp;•&nbsp; ${p.person_type?.toUpperCase()}</div>
+        </div>
+    `).join('');
+}
+
+// Export CSV
+async function exportCSV() {
+    const date = document.getElementById('adminDateFilter')?.value || todayDate();
+    const type = document.getElementById('adminTypeFilter')?.value || 'student';
+    const { data, error } = await db.from('attendance_logs')
+        .select('*').eq('date', date).eq('person_type', type).order('time_in', { ascending: true });
+    if (error || !data?.length) { showToast('No data to export.'); return; }
+
+    const headers = ['LRN/ID','Full Name','Date','Time In','Time Out','Status','Type'];
+    const rows = data.map(r => [r.lrn, r.full_name, r.date, r.time_in, r.time_out || '', r.status, r.person_type]);
+    const csv = [headers, ...rows].map(r => r.map(v => `"${v}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = `attendance_${date}.csv`;
+    a.click(); URL.revokeObjectURL(url);
+    showToast('CSV exported!');
+}
+
+// ══════════════════════════════════════════════
+//  CORE: RECORD ATTENDANCE
+// ══════════════════════════════════════════════
+async function recordAttendance(personType, lrn, name, mode, statusElId) {
+    const now   = new Date();
+    const date  = now.toISOString().split('T')[0];
+    const time  = nowTime();
+
     try {
-        const { data: existing, error } = await sbClient.from('attendance_logs').select('*').eq('lrn', id.trim()).eq('date', date).maybeSingle();
-        if (error) throw error;
-        if (currentMode === 'IN') {
+        const { data: existing, error: fetchErr } = await db
+            .from('attendance_logs').select('*')
+            .eq('lrn', lrn).eq('date', date).eq('person_type', personType)
+            .maybeSingle();
+        if (fetchErr) throw fetchErr;
+
+        if (mode === 'IN') {
             if (existing) {
-                statusBox.className = 'status-display error';
-                statusBox.innerHTML = `<h3>Already Timed In</h3><p>${name} checked in at ${existing.time_in}</p>`;
-            } else {
-                const attendStatus = now.getHours() >= 8 ? 'Late' : 'On Time';
-                const { error: e } = await sbClient.from('attendance_logs').insert({ lrn: id.trim(), full_name: name ? name.trim() : id.trim(), date, time_in: time, status: attendStatus });
-                if (e) throw e;
-                statusBox.className = 'status-display success';
-                statusBox.innerHTML = `<h3>Time In — ${attendStatus}</h3><p>${name} at ${time}</p>`;
+                setStatus(statusElId, 'warning', 'ALREADY TIMED IN', `${name} checked in at ${existing.time_in}`);
+                return;
             }
+            const status = now.getHours() >= 8 ? 'Late' : 'On Time';
+            const { error: insErr } = await db.from('attendance_logs').insert({
+                lrn, full_name: name, date, time_in: time, status, person_type: personType
+            });
+            if (insErr) throw insErr;
+            setStatus(statusElId, 'success', `TIME IN — ${status}`, `${name} at ${time}`);
+            showToast(`✓ ${name} timed in`);
         } else {
             if (!existing) {
-                statusBox.className = 'status-display error';
-                statusBox.innerHTML = `<h3>No Record Found</h3><p>${name} hasn't timed in today.</p>`;
-            } else if (existing.time_out) {
-                statusBox.className = 'status-display error';
-                statusBox.innerHTML = `<h3>Already Timed Out</h3><p>${name} left at ${existing.time_out}</p>`;
-            } else {
-                const { error: e } = await sbClient.from('attendance_logs').update({ time_out: time }).eq('id', existing.id);
-                if (e) throw e;
-                statusBox.className = 'status-display success';
-                statusBox.innerHTML = `<h3>Time Out</h3><p>${name} at ${time}</p>`;
+                setStatus(statusElId, 'error', 'NO TIME IN RECORD', `${name} hasn't timed in today.`);
+                return;
             }
+            if (existing.time_out) {
+                setStatus(statusElId, 'warning', 'ALREADY TIMED OUT', `${name} left at ${existing.time_out}`);
+                return;
+            }
+            const { error: updErr } = await db.from('attendance_logs').update({ time_out: time }).eq('id', existing.id);
+            if (updErr) throw updErr;
+            setStatus(statusElId, 'success', 'TIME OUT', `${name} at ${time}`);
+            showToast(`✓ ${name} timed out`);
         }
     } catch (e) {
-        statusBox.className = 'status-display error';
-        statusBox.innerHTML = `<h3>Error</h3><p>${e.message || 'Database error'}</p>`;
+        setStatus(statusElId, 'error', 'DATABASE ERROR', e.message || 'Unknown error');
+        console.error(e);
     }
-    setTimeout(() => { isProcessingScan = false; }, 3000);
-}
-
-function setupTabs() {
-    const nav = document.getElementById('tabNavigation');
-    nav.innerHTML = `<button class="tab-btn active" data-tab="scanTab">📷 Scan</button>`;
-    if (userType !== 'student') nav.innerHTML += `<button class="tab-btn" data-tab="studentsTab">📋 Logs</button>`;
-    nav.querySelectorAll('.tab-btn').forEach(btn => {
-        btn.addEventListener('click', () => switchTab(btn.dataset.tab, btn));
-    });
-}
-
-function switchTab(id, btn) {
-    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    document.getElementById(id).classList.add('active');
-    btn.classList.add('active');
-    if (id === 'studentsTab') filterStudentLogs();
-    if (id === 'scanTab') startAttendanceScanner();
-}
-
-function setMode(mode) {
-    currentMode = mode;
-    document.getElementById('modeInBtn').classList.toggle('active', mode === 'IN');
-    document.getElementById('modeOutBtn').classList.toggle('active', mode === 'OUT');
-}
-
-async function filterStudentLogs() {
-    const date = document.getElementById('studentDateFilter').value || new Date().toISOString().split('T')[0];
-    const display = document.getElementById('studentLogsDisplay');
-    display.innerHTML = '<p style="padding:10px;color:#888;font-size:13px;">Loading...</p>';
-    const { data, error } = await sbClient.from('attendance_logs').select('*').eq('date', date).order('time_in', { ascending: false });
-    if (error) { display.innerHTML = `<p style="color:red;padding:10px;">Error: ${error.message}</p>`; return; }
-    display.innerHTML = data?.length
-        ? data.map(log => `<div><strong>${log.full_name}</strong> IN: ${log.time_in} &nbsp;|&nbsp; OUT: ${log.time_out || '—'} &nbsp;|&nbsp; <span style="color:${log.status === 'Late' ? '#C8102E' : '#2E7D32'};font-weight:700;">${log.status}</span></div>`).join('')
-        : '<p style="padding:10px;color:#888;font-size:13px;">No logs found for this date.</p>';
 }
