@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PRESENCE - Smart Attendance</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div class="container">
+        <div id="initialScanScreen">
+            <div class="main-card">
+                <div class="header">
+                    <h1>👋 Welcome</h1>
+                    <p>Scan your ID to login</p>
+                </div>
+
+                <div id="initialReader" style="width: 100%; min-height: 250px; background: #000; border-radius: 15px;">
+                </div>
+
+                <div id="loginStatus" class="status-display info">
+                    <p>Initializing camera...</p>
+                </div>
+
+                <button id="retryBtn" class="hidden tab-btn active" onclick="location.reload()"
+                    style="margin-top:10px; width:100%;">Retry Camera</button>
+            </div>
+        </div>
+
+        <div id="mainApp" class="hidden">
+            <div class="main-card">
+                <div class="header">
+                    <h1>🎓 PRESENCE</h1>
+                    <p id="userInfo" style="font-size: 14px; color: #667eea; font-weight: bold;"></p>
+                </div>
+                <div class="tab-navigation" id="tabNavigation"></div>
+                <div id="scanTab" class="tab-content active">
+                    <div class="mode-toggle">
+                        <button class="mode-btn time-in active" onclick="setMode('IN')">⏰ TIME IN</button>
+                        <button class="mode-btn time-out" onclick="setMode('OUT')">🏃 TIME OUT</button>
+                    </div>
+                    <div id="reader" style="width: 100%; min-height: 250px; background: #000; border-radius: 15px;">
+                    </div>
+                    <div id="statusDisplay" class="status-display info">
+                        <h3>Ready</h3>
+                        <p>Scan student QR</p>
+                    </div>
+                </div>
+                <div id="studentsTab" class="tab-content">
+                    <div id="studentLogsDisplay"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="scripte.js"></script>
+</body>
+
+</html>
