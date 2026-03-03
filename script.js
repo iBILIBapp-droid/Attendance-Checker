@@ -5,47 +5,72 @@ const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 let currentMode = 'IN';
 let userType, userLRN, userName;
 let attendanceScanner = null;
-let isProcessingScan = false; // Debounce flag to prevent duplicate scans
+let isProcessingScan = false;
+let loginScanner = null;
 
+// ── BOOT ──────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
-    document.getElementById('loadingOverlay')?.remove();
+
+    // Wire up login button
+    document.getElementById('startScanBtn').addEventListener('click', startInitialScanner);
+
+    // Wire up mode buttons
+    document.getElementById('modeInBtn').addEventListener('click', () => setMode('IN'));
+    document.getElementById('modeOutBtn').addEventListener('click', () => setMode('OUT'));
+
+    // Wire up date filter
+    document.getElementById('studentDateFilter').addEventListener('change', filterStudentLogs);
+
+    // Set today's date on the filter
+    document.getElementById('studentDateFilter').value = new Date().toISOString().split('T')[0];
 });
 
-// ── LOGIN SCANNER ──────────────────────────────────────────────
+// ── LOGIN SCANNER ─────────────────────────────────────────────
 async function startInitialScanner() {
     const btn = document.getElementById('startScanBtn');
     const status = document.getElementById('loginStatus');
 
-    btn.style.display = 'none';
+    btn.disabled = true;
+    btn.textContent = '⏳  Starting Camera...';
     status.className = 'status-display info';
     status.innerHTML = '<h3>Camera Starting</h3><p>Allow camera permission if prompted.</p>';
 
-    // Small delay lets the browser repaint before camera starts
-    await new Promise(r => setTimeout(r, 300));
+    try {
+        // Ask for permission explicitly first
+        await navigator.mediaDevices.getUserMedia({ video: true });
+    } catch (err) {
+        status.className = 'status-display error';
+        status.innerHTML = `<h3>Permission Denied</h3><p>Please allow camera access in your browser settings, then refresh.</p>`;
+        btn.disabled = false;
+        btn.textContent = '📷  Scan ID to Login';
+        return;
+    }
 
-    const scanner = new Html5Qrcode('initialReader');
+    loginScanner = new Html5Qrcode('initialReader');
 
     try {
-        await scanner.start(
+        await loginScanner.start(
             { facingMode: 'environment' },
             { fps: 10, qrbox: { width: 220, height: 220 } },
             async (text) => {
-                // Stop scanner immediately so camera releases
-                try { await scanner.stop(); } catch (_) {}
+                try { await loginScanner.stop(); loginScanner = null; } catch (_) {}
                 await identifyUser(text);
-            }
+            },
+            (errorMsg) => { /* ignore per-frame errors */ }
         );
+        btn.style.display = 'none';
         status.className = 'status-display info';
-        status.innerHTML = '<h3>Camera Active</h3><p>Scan your ID card to login</p>';
+        status.innerHTML = '<h3>Camera Active</h3><p>Scan your ID card now</p>';
     } catch (err) {
         status.className = 'status-display error';
         status.innerHTML = `<h3>Camera Error</h3><p>${err.message || err}</p>`;
-        btn.style.display = 'block';
+        btn.disabled = false;
+        btn.textContent = '📷  Scan ID to Login';
         console.error('Login scanner error:', err);
     }
 }
 
-// ── IDENTIFY USER FROM QR ──────────────────────────────────────
+// ── IDENTIFY USER ─────────────────────────────────────────────
 async function identifyUser(qrData) {
     const parts = qrData.split('|');
     if (parts.length < 2) {
@@ -67,7 +92,7 @@ async function identifyUser(qrData) {
     await startAttendanceScanner();
 }
 
-// ── ATTENDANCE SCANNER ─────────────────────────────────────────
+// ── ATTENDANCE SCANNER ────────────────────────────────────────
 async function startAttendanceScanner() {
     if (attendanceScanner) {
         try { await attendanceScanner.stop(); } catch (_) {}
@@ -76,8 +101,6 @@ async function startAttendanceScanner() {
 
     const readerEl = document.getElementById('reader');
     if (!readerEl) return;
-
-    // Clear any leftover HTML5QrCode UI
     readerEl.innerHTML = '';
 
     attendanceScanner = new Html5Qrcode('reader');
@@ -86,21 +109,20 @@ async function startAttendanceScanner() {
         await attendanceScanner.start(
             { facingMode: 'environment' },
             { fps: 10, qrbox: { width: 220, height: 220 } },
-            onAttendanceScan
+            onAttendanceScan,
+            (errorMsg) => { /* ignore per-frame errors */ }
         );
     } catch (err) {
-        console.error('Attendance scanner error:', err);
         const statusBox = document.getElementById('statusDisplay');
-        if (statusBox) {
-            statusBox.className = 'status-display error';
-            statusBox.innerHTML = `<h3>Camera Error</h3><p>${err.message || err}</p>`;
-        }
+        statusBox.className = 'status-display error';
+        statusBox.innerHTML = `<h3>Camera Error</h3><p>${err.message || err}</p>`;
+        console.error('Attendance scanner error:', err);
     }
 }
 
-// ── PROCESS ATTENDANCE SCAN ────────────────────────────────────
+// ── PROCESS SCAN ──────────────────────────────────────────────
 async function onAttendanceScan(qrData) {
-    if (isProcessingScan) return; // Skip duplicate fires
+    if (isProcessingScan) return;
     isProcessingScan = true;
 
     const parts = qrData.split('|');
@@ -134,17 +156,15 @@ async function onAttendanceScan(qrData) {
                 statusBox.className = 'status-display error';
                 statusBox.innerHTML = `<h3>Already Timed In</h3><p>${name} checked in at ${existing.time_in}</p>`;
             } else {
-                const status = now.getHours() >= 8 ? 'Late' : 'On Time';
+                const attendStatus = now.getHours() >= 8 ? 'Late' : 'On Time';
                 const { error: insertErr } = await supabase.from('attendance_logs').insert({
                     lrn: id.trim(),
                     full_name: name ? name.trim() : id.trim(),
-                    date,
-                    time_in: time,
-                    status
+                    date, time_in: time, status: attendStatus
                 });
                 if (insertErr) throw insertErr;
                 statusBox.className = 'status-display success';
-                statusBox.innerHTML = `<h3>Time In — ${status}</h3><p>${name} at ${time}</p>`;
+                statusBox.innerHTML = `<h3>Time In — ${attendStatus}</h3><p>${name} at ${time}</p>`;
             }
         } else {
             if (!existing) {
@@ -155,9 +175,7 @@ async function onAttendanceScan(qrData) {
                 statusBox.innerHTML = `<h3>Already Timed Out</h3><p>${name} left at ${existing.time_out}</p>`;
             } else {
                 const { error: updateErr } = await supabase
-                    .from('attendance_logs')
-                    .update({ time_out: time })
-                    .eq('id', existing.id);
+                    .from('attendance_logs').update({ time_out: time }).eq('id', existing.id);
                 if (updateErr) throw updateErr;
                 statusBox.className = 'status-display success';
                 statusBox.innerHTML = `<h3>Time Out</h3><p>${name} at ${time}</p>`;
@@ -169,17 +187,19 @@ async function onAttendanceScan(qrData) {
         console.error(e);
     }
 
-    // Allow next scan after 3 seconds
     setTimeout(() => { isProcessingScan = false; }, 3000);
 }
 
-// ── TABS ───────────────────────────────────────────────────────
+// ── TABS ──────────────────────────────────────────────────────
 function setupTabs() {
     const nav = document.getElementById('tabNavigation');
-    nav.innerHTML = `<button class="tab-btn active" onclick="switchTab('scanTab', this)">📷 Scan</button>`;
+    nav.innerHTML = `<button class="tab-btn active" data-tab="scanTab">📷 Scan</button>`;
     if (userType !== 'student') {
-        nav.innerHTML += `<button class="tab-btn" onclick="switchTab('studentsTab', this)">📋 Logs</button>`;
+        nav.innerHTML += `<button class="tab-btn" data-tab="studentsTab">📋 Logs</button>`;
     }
+    nav.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => switchTab(btn.dataset.tab, btn));
+    });
 }
 
 function switchTab(id, btn) {
@@ -193,34 +213,29 @@ function switchTab(id, btn) {
 
 function setMode(mode) {
     currentMode = mode;
-    document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
-    event.target.classList.add('active');
+    document.getElementById('modeInBtn').classList.toggle('active', mode === 'IN');
+    document.getElementById('modeOutBtn').classList.toggle('active', mode === 'OUT');
 }
 
-// ── LOGS ───────────────────────────────────────────────────────
+// ── LOGS ──────────────────────────────────────────────────────
 async function filterStudentLogs() {
     const date = document.getElementById('studentDateFilter').value
         || new Date().toISOString().split('T')[0];
-
     const display = document.getElementById('studentLogsDisplay');
-    display.innerHTML = '<p style="padding:10px; color:#888; font-size:13px;">Loading...</p>';
+    display.innerHTML = '<p style="padding:10px;color:#888;font-size:13px;">Loading...</p>';
 
     const { data, error } = await supabase
-        .from('attendance_logs')
-        .select('*')
-        .eq('date', date)
+        .from('attendance_logs').select('*').eq('date', date)
         .order('time_in', { ascending: false });
 
-    if (error) {
-        display.innerHTML = `<p style="color:red; padding:10px;">Error: ${error.message}</p>`;
-        return;
-    }
+    if (error) { display.innerHTML = `<p style="color:red;padding:10px;">Error: ${error.message}</p>`; return; }
 
     display.innerHTML = data?.length
         ? data.map(log => `
             <div>
                 <strong>${log.full_name}</strong>
-                IN: ${log.time_in} &nbsp;|&nbsp; OUT: ${log.time_out || '—'} &nbsp;|&nbsp; <span style="color:${log.status === 'Late' ? '#C8102E' : '#2E7D32'}; font-weight:700;">${log.status}</span>
+                IN: ${log.time_in} &nbsp;|&nbsp; OUT: ${log.time_out || '—'} &nbsp;|&nbsp;
+                <span style="color:${log.status === 'Late' ? '#C8102E' : '#2E7D32'};font-weight:700;">${log.status}</span>
             </div>`).join('')
-        : '<p style="padding:10px; color:#888; font-size:13px;">No logs found for this date.</p>';
+        : '<p style="padding:10px;color:#888;font-size:13px;">No logs found for this date.</p>';
 }

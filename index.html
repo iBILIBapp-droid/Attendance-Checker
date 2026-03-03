@@ -12,7 +12,7 @@
 <body>
 <div class="container">
 
-    <!-- ── LOGIN SCREEN ── -->
+    <!-- LOGIN SCREEN -->
     <div id="initialScanScreen" class="main-card">
         <div class="header">
             <h1>PRESENCE</h1>
@@ -22,9 +22,7 @@
 
         <div id="initialReader"></div>
 
-        <button id="startScanBtn" onclick="startInitialScanner()">
-            📷 &nbsp;Scan ID to Login
-        </button>
+        <button id="startScanBtn">📷 &nbsp;Scan ID to Login</button>
 
         <div id="loginStatus" class="status-display info">
             <h3>Ready</h3>
@@ -32,7 +30,7 @@
         </div>
     </div>
 
-    <!-- ── MAIN APP ── -->
+    <!-- MAIN APP -->
     <div id="mainApp" class="hidden">
         <div class="main-card">
             <div class="header">
@@ -43,11 +41,10 @@
 
             <div class="tab-navigation" id="tabNavigation"></div>
 
-            <!-- Scan Tab -->
             <div id="scanTab" class="tab-content active">
                 <div class="mode-toggle">
-                    <button class="mode-btn time-in active" onclick="setMode('IN')">⏰ Time In</button>
-                    <button class="mode-btn time-out" onclick="setMode('OUT')">🏃 Time Out</button>
+                    <button class="mode-btn time-in active" id="modeInBtn">⏰ Time In</button>
+                    <button class="mode-btn time-out" id="modeOutBtn">🏃 Time Out</button>
                 </div>
                 <div id="reader"></div>
                 <div id="statusDisplay" class="status-display info">
@@ -56,14 +53,12 @@
                 </div>
             </div>
 
-            <!-- Logs Tab -->
             <div id="studentsTab" class="tab-content">
                 <div class="logs-section">
-                    <input type="date" id="studentDateFilter" onchange="filterStudentLogs()"/>
+                    <input type="date" id="studentDateFilter"/>
                     <div id="studentLogsDisplay"></div>
                 </div>
             </div>
-
         </div>
     </div>
 
