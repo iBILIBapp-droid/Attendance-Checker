@@ -3,65 +3,71 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PRESENCE - Smart Attendance</title>
+    <title>PRESENCE — Smart Attendance</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700;800&family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;700;900&family=Bebas+Neue&family=Noto+Sans+JP:wght@300;400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="container">
-        <div id="initialScanScreen" class="main-card">
-            <div class="header">
-                <h1>👋 Welcome to PRESENCE</h1>
-                <p>Please scan your QR code to continue</p>
-            </div>
-            
-            <div id="initialReader" style="width: 100%; min-height: 250px; background: #000; border-radius: 15px; overflow: hidden;"></div>
-            
-            <div style="text-align:center; margin-top:15px;">
-                <button id="startScanBtn" onclick="startInitialScanner()" class="tab-btn active" style="width:100%; padding: 15px; font-weight: bold;">
-                    📷 USE CAMERA TO LOGIN
-                </button>
-            </div>
+<div class="container">
 
-            <div id="loginStatus" class="status-display info">
-                <h3>Ready</h3>
-                <p>Click the button above to start your ID scan</p>
-            </div>
+    <!-- ── LOGIN SCREEN ── -->
+    <div id="initialScanScreen" class="main-card">
+        <div class="header">
+            <h1>PRESENCE</h1>
+            <p>Aringay National High School</p>
+            <p>Smart Attendance System</p>
         </div>
 
-        <div id="mainApp" class="hidden">
-            <div class="main-card">
-                <div class="header">
-                    <h1>🎓 PRESENCE</h1>
-                    <p>Aringay National High School</p>
-                    <p style="margin-top: 10px; font-size: 12px; color: var(--primary-color); font-weight: bold;" id="userInfo"></p>
-                </div>
-                <div class="tab-navigation" id="tabNavigation"></div>
+        <div id="initialReader"></div>
 
-                <div id="scanTab" class="tab-content active">
-                    <div class="mode-toggle" style="display:flex; gap:10px; margin-bottom:15px;">
-                        <button class="mode-btn time-in active" onclick="setMode('IN')">⏰ TIME IN</button>
-                        <button class="mode-btn time-out" onclick="setMode('OUT')">🏃 TIME OUT</button>
-                    </div>
-                    <div id="reader" style="width: 100%; min-height: 250px; background: #000; border-radius: 15px; overflow: hidden;"></div>
-                    <div id="statusDisplay" class="status-display info">
-                        <h3>Ready to Scan</h3>
-                        <p>Point camera at student QR code</p>
-                    </div>
-                </div>
+        <button id="startScanBtn" onclick="startInitialScanner()">
+            📷 &nbsp;Scan ID to Login
+        </button>
 
-                <div id="studentsTab" class="tab-content">
-                    <div class="logs-section">
-                        <input type="date" id="studentDateFilter" onchange="filterStudentLogs()" style="width:100%; padding:10px; margin-bottom:10px; border-radius:8px; border:1px solid #ddd;"/>
-                        <div id="studentLogsDisplay"></div>
-                    </div>
-                </div>
-            </div>
+        <div id="loginStatus" class="status-display info">
+            <h3>Ready</h3>
+            <p>Press the button above to activate the camera</p>
         </div>
     </div>
-    <script src="script.js"></script>
+
+    <!-- ── MAIN APP ── -->
+    <div id="mainApp" class="hidden">
+        <div class="main-card">
+            <div class="header">
+                <h1>🎓 PRESENCE</h1>
+                <p>Aringay National High School</p>
+                <p id="userInfo"></p>
+            </div>
+
+            <div class="tab-navigation" id="tabNavigation"></div>
+
+            <!-- Scan Tab -->
+            <div id="scanTab" class="tab-content active">
+                <div class="mode-toggle">
+                    <button class="mode-btn time-in active" onclick="setMode('IN')">⏰ Time In</button>
+                    <button class="mode-btn time-out" onclick="setMode('OUT')">🏃 Time Out</button>
+                </div>
+                <div id="reader"></div>
+                <div id="statusDisplay" class="status-display info">
+                    <h3>Ready to Scan</h3>
+                    <p>Point camera at student QR code</p>
+                </div>
+            </div>
+
+            <!-- Logs Tab -->
+            <div id="studentsTab" class="tab-content">
+                <div class="logs-section">
+                    <input type="date" id="studentDateFilter" onchange="filterStudentLogs()"/>
+                    <div id="studentLogsDisplay"></div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+</div>
+<script src="script.js"></script>
 </body>
 </html>
-
