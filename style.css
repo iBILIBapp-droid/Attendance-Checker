@@ -515,3 +515,1077 @@ html, body {
 ::-webkit-scrollbar { width: 3px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--red); }
+
+/* ── DEMO LOGINS ─────────────────────────────── */
+.demo-logins {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 14px 0 4px;
+    border-top: 1px solid var(--light);
+}
+.demo-label {
+    text-align: center;
+    font-size: 10px;
+    letter-spacing: 3px;
+    color: rgba(0,0,0,0.3);
+    text-transform: uppercase;
+}
+.demo-btns {
+    display: flex;
+    gap: 8px;
+}
+.demo-btn {
+    flex: 1;
+    padding: 10px 6px;
+    border: 2px solid var(--red);
+    background: transparent;
+    color: var(--red);
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 12px;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: all 0.2s;
+    border-radius: 2px;
+}
+.demo-btn:hover { background: var(--red); color: white; }
+.demo-btn-admin {
+    border-color: var(--dark);
+    color: var(--dark);
+}
+.demo-btn-admin:hover { background: var(--dark); color: white; }
+
+/* ── UPLOAD TAB ──────────────────────────────── */
+.upload-login-card {
+    background: var(--white);
+    border-left: 4px solid var(--red);
+    padding: 24px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+.upload-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 20px;
+    letter-spacing: 3px;
+    color: var(--dark);
+}
+.upload-subtitle {
+    font-size: 12px;
+    color: rgba(0,0,0,0.5);
+    line-height: 1.6;
+}
+.upload-form {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.upload-input {
+    width: 100%;
+    padding: 12px 14px;
+    border: 2px solid var(--light);
+    background: var(--off-white);
+    font-family: 'Noto Sans JP', sans-serif;
+    font-size: 13px;
+    color: var(--dark);
+    outline: none;
+    border-radius: 0;
+    transition: border-color 0.2s;
+}
+.upload-input:focus { border-color: var(--red); }
+
+.upload-panel-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 14px;
+    letter-spacing: 4px;
+    color: var(--red);
+    padding: 4px 0;
+}
+
+.upload-options {
+    background: var(--white);
+    border-left: 4px solid var(--red);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+.upload-option-row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.upload-opt-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: rgba(0,0,0,0.45);
+}
+
+.upload-btns {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.upload-history { margin-top: 8px; }
+.upload-history-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 12px;
+    letter-spacing: 3px;
+    color: rgba(0,0,0,0.35);
+    padding: 10px 0 6px;
+    border-bottom: 1px solid var(--light);
+    margin-bottom: 8px;
+}
+.upload-history-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 10px 12px;
+    background: var(--white);
+    border-left: 3px solid var(--gold);
+    margin-bottom: 4px;
+}
+.upload-history-name {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--dark);
+    word-break: break-all;
+    margin-bottom: 3px;
+}
+.upload-history-meta { font-size: 10px; color: rgba(0,0,0,0.45); }
+.upload-dl-btn {
+    flex-shrink: 0;
+    width: 30px; height: 30px;
+    background: var(--dark);
+    color: var(--white);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px;
+    text-decoration: none;
+    border-radius: 2px;
+    transition: background 0.2s;
+}
+.upload-dl-btn:hover { background: var(--red); }
+
+/* ── CAMERA MIRROR FIX ───────────────────────── */
+/* Only mirror the video display, NOT the canvas (canvas used for QR decode) */
+.reader-box video {
+    transform: scaleX(-1) !important;
+}
+.reader-box canvas {
+    transform: scaleX(-1) !important;
+}
+/* Make reader taller for easier scanning */
+.reader-box {
+    min-height: 320px !important;
+}
+
+@keyframes flashFade {
+    0%   { opacity: 1; }
+    100% { opacity: 0; }
+}
+
+/* ══════════════════════════════════════════════
+   STUDENT ACTION PAGE
+══════════════════════════════════════════════ */
+.action-wrap {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    background: var(--red);
+    background-image:
+        repeating-linear-gradient(0deg, transparent, transparent 50px, rgba(255,255,255,0.025) 50px, rgba(255,255,255,0.025) 51px),
+        repeating-linear-gradient(90deg, transparent, transparent 50px, rgba(255,255,255,0.025) 50px, rgba(255,255,255,0.025) 51px);
+}
+
+.action-header {
+    padding: 30px 25px 20px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.action-brand {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 36px;
+    color: var(--white);
+    letter-spacing: 10px;
+    position: relative;
+    z-index: 1;
+}
+
+.action-school {
+    font-size: 10px;
+    color: rgba(255,255,255,0.6);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    position: relative;
+    z-index: 1;
+}
+
+.action-card {
+    background: var(--off-white);
+    flex: 1;
+    border-radius: 24px 24px 0 0;
+    padding: 28px 22px 30px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    position: relative;
+}
+
+.action-card::before {
+    content: '';
+    width: 40px; height: 4px;
+    background: rgba(0,0,0,0.12);
+    border-radius: 2px;
+    position: absolute;
+    top: 12px; left: 50%;
+    transform: translateX(-50%);
+}
+
+.action-greeting {
+    font-size: 13px;
+    color: rgba(0,0,0,0.45);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    font-weight: 500;
+}
+
+.action-name {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 34px;
+    letter-spacing: 2px;
+    color: var(--dark);
+    line-height: 1;
+    text-transform: uppercase;
+}
+
+.action-lrn {
+    font-size: 11px;
+    color: rgba(0,0,0,0.4);
+    letter-spacing: 2px;
+    margin-top: -6px;
+}
+
+.action-time {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 48px;
+    color: var(--red);
+    letter-spacing: 4px;
+    line-height: 1;
+    text-align: center;
+    margin: 4px 0;
+}
+
+.action-date {
+    text-align: center;
+    font-size: 11px;
+    color: rgba(0,0,0,0.4);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-top: -8px;
+}
+
+.action-today-record {
+    background: var(--white);
+    border-left: 4px solid var(--gold);
+    padding: 12px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.today-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+}
+.today-row span {
+    color: rgba(0,0,0,0.45);
+    text-transform: uppercase;
+    font-size: 10px;
+    letter-spacing: 2px;
+}
+.today-row strong {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 16px;
+    letter-spacing: 2px;
+}
+
+.action-btns {
+    display: flex;
+    gap: 12px;
+    margin-top: 4px;
+}
+
+.action-btn-in,
+.action-btn-out {
+    flex: 1;
+    padding: 22px 10px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
+}
+
+.action-btn-in {
+    background: var(--red);
+    color: var(--white);
+}
+.action-btn-in:hover { background: var(--deep-red); }
+
+.action-btn-out {
+    background: var(--dark);
+    color: var(--white);
+}
+.action-btn-out:hover { background: #333; }
+
+.action-btn-in.action-btn-done,
+.action-btn-out.action-btn-done {
+    background: var(--light);
+    color: rgba(0,0,0,0.3);
+    cursor: not-allowed;
+}
+
+.action-btn-icon { font-size: 28px; }
+.action-btn-label {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 18px;
+    letter-spacing: 4px;
+}
+
+.action-back-btn {
+    background: transparent;
+    border: 1px solid rgba(0,0,0,0.15);
+    color: rgba(0,0,0,0.4);
+    padding: 10px;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 13px;
+    letter-spacing: 3px;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-top: 4px;
+}
+.action-back-btn:hover {
+    border-color: var(--red);
+    color: var(--red);
+}
+
+/* ══════════════════════════════════════════════
+   LOGIN SCREEN LAYOUT FIX
+══════════════════════════════════════════════ */
+.login-wrap {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.login-hero {
+    padding: 30px 25px 18px;
+    flex-shrink: 0;
+}
+
+.login-brand h1 {
+    font-size: 42px;
+}
+
+.login-card {
+    flex: 1;
+    border-radius: 24px 24px 0 0;
+    padding: 20px 18px 24px;
+    gap: 12px;
+    overflow-y: auto;
+}
+
+/* Reader box — compact, not full screen */
+#login-reader.reader-box,
+#student-reader.reader-box,
+#teacher-reader.reader-box,
+#admin-reader.reader-box {
+    min-height: 0 !important;
+    height: 220px !important;
+    border-radius: 8px;
+}
+
+/* Remove the pulsing dashed overlay on login reader */
+#login-reader.reader-box::after {
+    display: none;
+}
+
+/* Html5Qrcode injects its own shaded region — keep it visible */
+.reader-box video {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover;
+}
+
+/* Status box — tighter */
+.status-box {
+    padding: 11px 14px;
+}
+.status-box strong {
+    font-size: 14px;
+}
+.status-box p {
+    font-size: 11px;
+    margin-top: 1px;
+}
+
+/* Demo buttons — more compact */
+.demo-btns {
+    gap: 6px;
+}
+.demo-btn {
+    padding: 9px 4px;
+    font-size: 11px;
+}
+
+/* ══════════════════════════════════════════════
+   SCAN TAB — compact layout
+══════════════════════════════════════════════ */
+.tab-pane {
+    padding: 14px;
+    gap: 10px;
+}
+
+.mode-bar {
+    flex-shrink: 0;
+}
+
+.mode-btn {
+    padding: 11px 8px;
+    font-size: 14px;
+}
+
+.scan-hint {
+    padding: 2px 0;
+    font-size: 10px;
+}
+
+/* ══════════════════════════════════════════════
+   ACTION PAGE — tighter header, bigger buttons
+══════════════════════════════════════════════ */
+.action-header {
+    padding: 18px 20px 14px;
+}
+
+.action-brand {
+    font-size: 28px;
+    letter-spacing: 8px;
+}
+
+.action-school {
+    font-size: 9px;
+}
+
+/* Shrink kanji watermark on action page */
+.action-header .kanji-bg {
+    font-size: 70px !important;
+    opacity: 0.06;
+}
+
+.action-card {
+    padding: 22px 18px 24px;
+    gap: 12px;
+    border-radius: 20px 20px 0 0;
+}
+
+.action-greeting {
+    font-size: 11px;
+}
+
+.action-name {
+    font-size: 28px;
+}
+
+.action-time {
+    font-size: 42px;
+    margin: 0;
+}
+
+.action-date {
+    font-size: 10px;
+    margin-top: -4px;
+}
+
+.action-btns {
+    gap: 10px;
+    margin-top: 2px;
+}
+
+.action-btn-in,
+.action-btn-out {
+    padding: 26px 10px;
+    border-radius: 6px;
+}
+
+.action-btn-icon { font-size: 26px; }
+
+.action-btn-label {
+    font-size: 17px;
+    letter-spacing: 3px;
+}
+
+.action-today-record {
+    padding: 10px 14px;
+    gap: 4px;
+}
+
+.action-back-btn {
+    padding: 9px;
+    font-size: 12px;
+    margin-top: 0;
+}
+
+/* ══════════════════════════════════════════════
+   RESPONSIVE — PHONE OPTIMIZED
+══════════════════════════════════════════════ */
+
+/* ── BASE: MOBILE FIRST (all phones) ─────────── */
+html, body {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+}
+
+.container {
+    width: 100%;
+    max-width: 100%;
+}
+
+.screen.active {
+    width: 100%;
+    min-height: 100vh;
+}
+
+/* ── SMALL PHONE (under 380px — e.g. iPhone SE) ── */
+@media (max-width: 380px) {
+    .login-brand h1        { font-size: 34px; letter-spacing: 6px; }
+    .login-hero            { padding: 24px 18px 14px; }
+    .login-card            { padding: 16px 14px 20px; gap: 10px; }
+    .action-name           { font-size: 22px; }
+    .action-time           { font-size: 34px; }
+    .action-btn-in,
+    .action-btn-out        { padding: 16px 8px; }
+    .action-btn-label      { font-size: 14px; }
+    .action-btn-icon       { font-size: 22px; }
+    .tab-btn               { font-size: 10px; padding: 10px 4px; }
+    #login-reader.reader-box,
+    #student-reader.reader-box,
+    #teacher-reader.reader-box,
+    #admin-reader.reader-box { height: 190px !important; }
+}
+
+/* ── NORMAL PHONE (380px–480px — e.g. iPhone 14, Galaxy S) ── */
+@media (min-width: 380px) and (max-width: 480px) {
+    .login-brand h1        { font-size: 44px; }
+    .login-hero            { padding: 32px 22px 18px; }
+    .login-card            { padding: 20px 18px 24px; gap: 13px; }
+    .action-name           { font-size: 30px; }
+    .action-time           { font-size: 46px; }
+    .action-btn-in,
+    .action-btn-out        { padding: 24px 10px; }
+    .action-btn-label      { font-size: 17px; }
+    .action-btn-icon       { font-size: 28px; }
+    #login-reader.reader-box,
+    #student-reader.reader-box,
+    #teacher-reader.reader-box,
+    #admin-reader.reader-box { height: 230px !important; }
+}
+
+/* ── LARGE PHONE (480px–600px — e.g. iPhone Pro Max, Galaxy Ultra) ── */
+@media (min-width: 480px) and (max-width: 600px) {
+    .login-brand h1        { font-size: 50px; }
+    .login-hero            { padding: 36px 26px 20px; }
+    .login-card            { padding: 24px 22px 28px; gap: 15px; }
+    .action-name           { font-size: 36px; }
+    .action-time           { font-size: 56px; }
+    .action-btn-in,
+    .action-btn-out        { padding: 30px 12px; }
+    .action-btn-label      { font-size: 20px; }
+    .action-btn-icon       { font-size: 32px; }
+    #login-reader.reader-box,
+    #student-reader.reader-box,
+    #teacher-reader.reader-box,
+    #admin-reader.reader-box { height: 260px !important; }
+}
+
+/* ══════════════════════════════════════════════
+   PC / TABLET (600px+) — Split layout
+══════════════════════════════════════════════ */
+@media (min-width: 600px) {
+
+    /* Full page dark background */
+    body {
+        background: #0d0d0d;
+        display: grid;
+        grid-template-columns: 1fr 420px 1fr;
+        grid-template-rows: 1fr;
+        align-items: center;
+        min-height: 100vh;
+        padding: 0;
+        gap: 0;
+    }
+
+    /* Left panel — branding */
+    body::before {
+        content: '';
+        display: block;
+        grid-column: 1;
+        grid-row: 1;
+    }
+
+    /* Left side decorative panel */
+    body::after {
+        content: '';
+        position: fixed;
+        left: 0; top: 0;
+        width: calc(50vw - 210px);
+        height: 100vh;
+        background: linear-gradient(135deg, rgba(200,16,46,0.12) 0%, transparent 70%);
+        border-right: 1px solid rgba(200,16,46,0.08);
+        pointer-events: none;
+        z-index: 0;
+    }
+
+    /* Right side panel */
+    .pc-right-panel {
+        display: block !important;
+    }
+
+    /* App container — phone frame in center column */
+    .container {
+        grid-column: 2;
+        grid-row: 1;
+        width: 100%;
+        max-width: 420px;
+        height: 90vh;
+        max-height: 820px;
+        border-radius: 40px;
+        overflow: hidden;
+        box-shadow:
+            0 0 0 8px #1a1a1a,
+            0 0 0 10px #222,
+            0 40px 100px rgba(0,0,0,0.8),
+            0 0 60px rgba(200,16,46,0.08);
+        position: relative;
+        z-index: 1;
+        display: flex;
+        flex-direction: column;
+    }
+
+    /* Notch effect on top of phone frame */
+    .container::before {
+        content: '';
+        position: absolute;
+        top: 0; left: 50%;
+        transform: translateX(-50%);
+        width: 100px; height: 28px;
+        background: #1a1a1a;
+        border-radius: 0 0 18px 18px;
+        z-index: 100;
+    }
+
+    .screen.active {
+        min-height: 0;
+        flex: 1;
+        overflow-y: auto;
+        overflow-x: hidden;
+    }
+
+    .login-wrap,
+    .action-wrap {
+        min-height: 100%;
+    }
+
+    .app-body {
+        overflow-y: auto;
+        flex: 1;
+    }
+
+    /* Left branding panel content */
+    .pc-left-panel {
+        grid-column: 1;
+        grid-row: 1;
+        display: flex !important;
+        flex-direction: column;
+        justify-content: center;
+        padding: 60px 40px 60px 60px;
+        position: relative;
+        z-index: 1;
+    }
+
+    .pc-right-panel {
+        grid-column: 3;
+        grid-row: 1;
+        display: flex !important;
+        flex-direction: column;
+        justify-content: center;
+        padding: 60px 60px 60px 40px;
+        position: relative;
+        z-index: 1;
+    }
+}
+
+/* ── WIDE PC (1400px+) ────────────────────────── */
+@media (min-width: 1400px) {
+    body {
+        grid-template-columns: 1fr 440px 1fr;
+    }
+    .container {
+        max-width: 440px;
+        height: 88vh;
+    }
+    .pc-left-panel  { padding: 60px 40px 60px 100px; }
+    .pc-right-panel { padding: 60px 100px 60px 40px; }
+}
+
+/* ══════════════════════════════════════════════
+   PC SIDE PANELS
+══════════════════════════════════════════════ */
+.pc-left-panel,
+.pc-right-panel {
+    display: none; /* hidden on mobile, shown via media query */
+}
+
+.pc-panel-content {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+.pc-logo {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 52px;
+    color: var(--white);
+    letter-spacing: 10px;
+    line-height: 1;
+}
+
+.pc-tagline {
+    font-size: 22px;
+    color: rgba(255,255,255,0.7);
+    font-weight: 300;
+    line-height: 1.4;
+    letter-spacing: 1px;
+}
+
+.pc-school {
+    font-size: 11px;
+    color: var(--gold);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    font-weight: 700;
+}
+
+.pc-divider {
+    width: 40px;
+    height: 3px;
+    background: var(--red);
+    border-radius: 2px;
+    margin: 4px 0;
+}
+
+.pc-features {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 4px;
+}
+
+.pc-feature {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: rgba(255,255,255,0.5);
+    font-size: 13px;
+    letter-spacing: 1px;
+}
+
+.pc-feature-icon {
+    font-size: 18px;
+    width: 32px;
+    height: 32px;
+    background: rgba(200,16,46,0.15);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+/* Right panel */
+.pc-panel-right { align-items: flex-start; }
+
+.pc-stats-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 11px;
+    letter-spacing: 4px;
+    color: rgba(255,255,255,0.3);
+    margin-bottom: 4px;
+}
+
+.pc-stat-block {
+    width: 100%;
+    padding: 16px 18px;
+    background: rgba(255,255,255,0.04);
+    border-left: 3px solid rgba(255,255,255,0.1);
+    border-radius: 0 4px 4px 0;
+}
+.pc-stat-block.warn  { border-left-color: var(--red); }
+.pc-stat-block.green { border-left-color: #1B6B38; }
+
+.pc-stat-num {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 40px;
+    color: var(--white);
+    letter-spacing: 3px;
+    line-height: 1;
+}
+.pc-stat-block.warn  .pc-stat-num { color: #ff6b6b; }
+.pc-stat-block.green .pc-stat-num { color: #4caf7d; }
+
+.pc-stat-lbl {
+    font-size: 10px;
+    color: rgba(255,255,255,0.35);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-top: 2px;
+}
+
+.pc-time-display {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 38px;
+    color: var(--white);
+    letter-spacing: 4px;
+    line-height: 1;
+}
+
+.pc-date-display {
+    font-size: 11px;
+    color: rgba(255,255,255,0.35);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-top: 2px;
+}
+
+/* ══════════════════════════════════════════════
+   PC — BIGGER CAMERA / PHONE FRAME
+══════════════════════════════════════════════ */
+@media (min-width: 600px) {
+    .container {
+        max-width: 520px !important;
+        height: 92vh !important;
+        max-height: 900px !important;
+    }
+
+    #login-reader.reader-box,
+    #student-reader.reader-box,
+    #teacher-reader.reader-box,
+    #admin-reader.reader-box {
+        height: 360px !important;
+    }
+
+    /* Bigger text inside the phone frame on PC */
+    .login-brand h1     { font-size: 52px !important; }
+    .action-name        { font-size: 36px !important; }
+    .action-time        { font-size: 58px !important; }
+    .action-btn-in,
+    .action-btn-out     { padding: 32px 14px !important; }
+    .action-btn-label   { font-size: 22px !important; }
+    .action-btn-icon    { font-size: 34px !important; }
+    .tab-btn            { font-size: 13px !important; padding: 15px 10px !important; }
+    .mode-btn           { font-size: 16px !important; padding: 15px !important; }
+    .btn-primary        { font-size: 20px !important; padding: 20px !important; }
+    .status-box strong  { font-size: 17px !important; }
+    .status-box p       { font-size: 13px !important; }
+}
+
+@media (min-width: 1200px) {
+    .container {
+        max-width: 560px !important;
+        height: 90vh !important;
+        max-height: 920px !important;
+    }
+
+    #login-reader.reader-box,
+    #student-reader.reader-box,
+    #teacher-reader.reader-box,
+    #admin-reader.reader-box {
+        height: 400px !important;
+    }
+}
+
+/* ── HALF DAY + NO TIME OUT status badges ────── */
+.log-status.halfday {
+    background: #FFF3E0;
+    color: #E65100;
+}
+.log-status.noout {
+    background: #F3E5F5;
+    color: #6A1B9A;
+}
+
+/* ── SINGLE BIG TIME IN BUTTON ───────────────── */
+.action-btns {
+    flex-direction: column;
+}
+
+.action-btn-in {
+    width: 100%;
+    padding: 30px 14px !important;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.action-btn-sub {
+    font-family: 'Noto Sans JP', sans-serif;
+    font-size: 11px;
+    font-weight: 400;
+    letter-spacing: 1px;
+    opacity: 0.85;
+    text-transform: none;
+    display: block;
+}
+
+.action-btn-in.action-btn-done {
+    background: var(--light) !important;
+    color: rgba(0,0,0,0.3) !important;
+    cursor: not-allowed;
+}
+
+/* Half Day stat card color */
+.stat-card.halfday { border-left-color: #E65100; }
+.stat-card.halfday .stat-value { color: #E65100; }
+
+/* ── RESTORE TWO-BUTTON LAYOUT ───────────────── */
+.action-btns {
+    flex-direction: row !important;
+    gap: 12px;
+}
+
+.action-btn-in,
+.action-btn-out {
+    flex: 1;
+    padding: 24px 10px !important;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.action-btn-sub {
+    font-family: 'Noto Sans JP', sans-serif;
+    font-size: 10px;
+    font-weight: 400;
+    letter-spacing: 0.5px;
+    opacity: 0.8;
+    display: block;
+    text-align: center;
+}
+
+/* ══════════════════════════════════════════════
+   CREDITS — JRG
+══════════════════════════════════════════════ */
+.credits {
+    position: fixed;
+    bottom: 18px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 50;
+    pointer-events: none;
+    animation: creditsFloat 4s ease-in-out infinite;
+}
+
+@keyframes creditsFloat {
+    0%, 100% { transform: translateX(-50%) translateY(0); }
+    50%       { transform: translateX(-50%) translateY(-4px); }
+}
+
+.credits-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    background: rgba(10,10,10,0.82);
+    border: 1px solid rgba(200,16,46,0.35);
+    border-radius: 12px;
+    padding: 10px 20px;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    box-shadow: 0 4px 24px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.04);
+    white-space: nowrap;
+}
+
+.credits-tag {
+    font-family: 'Noto Sans JP', sans-serif;
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 4px;
+    color: var(--gold);
+    text-transform: uppercase;
+}
+
+.credits-name {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 28px;
+    letter-spacing: 8px;
+    color: var(--white);
+    line-height: 1;
+    text-shadow: 0 0 20px rgba(200,16,46,0.6);
+}
+
+.credits-full {
+    font-family: 'Noto Sans JP', sans-serif;
+    font-size: 10px;
+    font-weight: 300;
+    letter-spacing: 2px;
+    color: rgba(255,255,255,0.55);
+    text-transform: uppercase;
+}
+
+.credits-line {
+    width: 30px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--red), transparent);
+    margin: 4px 0 2px;
+}
+
+.credits-sub {
+    font-size: 9px;
+    letter-spacing: 2px;
+    color: rgba(255,255,255,0.25);
+    text-transform: uppercase;
+}
+
+/* Hide credits inside the app container on mobile so it doesn't overlap */
+@media (max-width: 599px) {
+    .credits {
+        bottom: 10px;
+    }
+    .credits-name {
+        font-size: 22px;
+        letter-spacing: 6px;
+    }
+    .credits-inner {
+        padding: 8px 16px;
+    }
+}
+
+/* On PC, show it outside the phone frame */
+@media (min-width: 600px) {
+    .credits {
+        bottom: 24px;
+        left: 50%;
+    }
+}
