@@ -3,7 +3,7 @@
 //  Replace YOUR_PROJECT_URL and YOUR_ANON_KEY
 //  with your actual Supabase credentials.
 // ═══════════════════════════════════════════════
-const SUPABASE_URL  = 'https://yapnbwxerwppsepcdcxi.supabase.co';
+const SUPABASE_URL = 'https://yapnbwxerwppsepcdcxi.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlhcG5id3hlcndwcHNlcGNkY3hpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI1MjY2NDIsImV4cCI6MjA4ODEwMjY0Mn0.ROjaZEjyQ22-GHEussOo1Sr7VCAhoWnjO-42NCWtrxk';
 const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
 
@@ -16,14 +16,14 @@ function getAttendanceStatus(date) {
     const now = date || new Date();
     const mins = now.getHours() * 60 + now.getMinutes();
     if (mins <= 7 * 60 + 34) return 'On Time';
-    if (mins < 12 * 60)      return 'Late';
+    if (mins < 12 * 60) return 'Late';
     return 'Half Day';
 }
-let currentUser   = null; // { id, name, type: 'student'|'teacher'|'admin' }
-let loginScanner  = null;
+let currentUser = null; // { id, name, type: 'student'|'teacher'|'admin' }
+let loginScanner = null;
 let activeScanner = null;
-let scanMode      = 'IN';   // current scan mode for active scanner
-let scanLock      = false;  // debounce
+let scanMode = 'IN';   // current scan mode for active scanner
+let scanLock = false;  // debounce
 
 // ── Boot ─────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
@@ -38,7 +38,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Date filters — default to today
     const today = todayDate();
-    ['teacherDateFilter','adminDateFilter'].forEach(id => {
+    ['teacherDateFilter', 'adminDateFilter'].forEach(id => {
         const el = document.getElementById(id);
         if (el) { el.value = today; el.addEventListener('change', () => loadLogs(id.includes('teacher') ? 'teacher' : 'admin')); }
     });
@@ -98,13 +98,13 @@ function wireTabNav(navId, onTabChange) {
 // ── Stop any running scanner ──────────────────
 async function stopScanner(ref) {
     if (!ref) return null;
-    try { if (ref.isScanning) await ref.stop(); } catch (_) {}
+    try { if (ref.isScanning) await ref.stop(); } catch (_) { }
     return null;
 }
 
 // ── LOGIN SCANNER ─────────────────────────────
 async function startLoginScanner() {
-    const btn    = document.getElementById('loginScanBtn');
+    const btn = document.getElementById('loginScanBtn');
     const status = document.getElementById('loginStatus');
     btn.disabled = true;
     btn.textContent = '⏳ STARTING CAMERA...';
@@ -130,7 +130,7 @@ async function startLoginScanner() {
                 await stopScanner(loginScanner); loginScanner = null;
                 await handleLogin(text);
             },
-            () => {}
+            () => { }
         );
         btn.style.display = 'none';
         setStatus('loginStatus', 'info', 'CAMERA ACTIVE', 'Scan your ID card now');
@@ -155,20 +155,20 @@ async function handleLogin(qrData) {
         const parts = raw.split('|');
         const rawType = parts[0].trim().toLowerCase();
         // Only treat first segment as type if it's a known role keyword
-        if (['student','teacher','admin'].includes(rawType)) {
+        if (['student', 'teacher', 'admin'].includes(rawType)) {
             type = rawType;
-            id   = (parts[1] || '').trim();
+            id = (parts[1] || '').trim();
             name = (parts[2] || id).trim();
         } else {
             // Pipe-separated but no role prefix — treat whole thing or first part as LRN/name
-            id   = parts[0].trim();
+            id = parts[0].trim();
             name = parts[1]?.trim() || id;
             type = 'student';
         }
     } else if (/^\d{6,12}$/.test(raw)) {
         // Pure numeric — treat as LRN
         type = 'student';
-        id   = raw;
+        id = raw;
         name = await lookupNameByLRN(id) || `Student ${id}`;
     } else {
         // Anything else (plain name, mixed text) — treat as student
@@ -177,7 +177,7 @@ async function handleLogin(qrData) {
         name = raw.replace(/\r?\n/g, ' ').trim();
         // Try to find by name in DB
         const found = await lookupByName(name);
-        id   = found?.lrn || raw.replace(/\s+/g, '_').toLowerCase();
+        id = found?.lrn || raw.replace(/\s+/g, '_').toLowerCase();
         if (found) name = found.full_name;
     }
 
@@ -193,7 +193,6 @@ async function handleLogin(qrData) {
     } else if (currentUser.type === 'teacher') {
         document.getElementById('teacherBadge').innerHTML = `${currentUser.name}<br><span style="font-size:9px;opacity:0.7">TEACHER</span>`;
         showScreen('teacher');
-        await startTeacherScanner();
         loadTeacherOwnTime();
     } else if (currentUser.type === 'admin') {
         document.getElementById('adminBadge').innerHTML = `${currentUser.name}<br><span style="font-size:9px;opacity:0.7">ADMIN</span>`;
@@ -230,7 +229,7 @@ async function startQrScanner(readerId, onScan) {
             { facingMode: 'environment' },
             { fps: 15, qrbox: (w, h) => { const s = Math.min(w, h) * 0.75; return { width: s, height: s }; }, rememberLastUsedCamera: true, aspectRatio: 1.0 },
             onScan,
-            () => {}
+            () => { }
         );
         activeScanner = scanner;
     } catch (err) {
@@ -271,83 +270,85 @@ async function showStudentActionPage(id, name) {
     loginScanner = await stopScanner(loginScanner);
 
     const hour = new Date().getHours();
-    const greeting = hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening';
-    document.getElementById('actionGreeting').textContent = greeting;
+    document.getElementById('actionGreeting').textContent = hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening';
     document.getElementById('actionName').textContent = name;
     document.getElementById('actionLRN').textContent = 'LRN: ' + id;
 
     if (clockInterval) clearInterval(clockInterval);
     function updateClock() {
         const now = new Date();
+        const mins = now.getHours() * 60 + now.getMinutes();
+        const h = now.getHours();
         document.getElementById('actionClock').textContent =
             now.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
         document.getElementById('actionDate').textContent =
             now.toLocaleDateString('en-PH', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
-        // Update status preview on the button
-        const status = getAttendanceStatus(now);
-        const colors = { 'On Time': '#1B6B38', 'Late': '#C8102E', 'Half Day': '#E65100' };
-        const subEl = document.getElementById('actionBtnStatus');
-        if (subEl) {
-            subEl.textContent = 'Will be marked: ' + status.toUpperCase();
-            subEl.style.color = 'rgba(255,255,255,0.75)';
-        }
+        // TIME IN preview
+        let inLabel = mins <= 7 * 60 + 34 ? 'Will be: ON TIME' : mins < 12 * 60 ? 'Will be: LATE' : 'Will be: HALF DAY';
+        // TIME OUT preview: 12:00–3:59 = Half Day, 4:00 PM+ = Full Day
+        let outLabel = (h >= 12 && h < 16) ? 'Will mark: HALF DAY' : h >= 16 ? 'Will mark: FULL DAY' : 'Time in first';
+
+        const inSub = document.getElementById('actionBtnInStatus');
+        const outSub = document.getElementById('actionBtnOutStatus');
+        if (inSub) inSub.textContent = inLabel;
+        if (outSub) outSub.textContent = outLabel;
     }
     updateClock();
     clockInterval = setInterval(updateClock, 1000);
 
-    // Check if already recorded today
     const today = todayDate();
     const { data: existing } = await db.from('attendance_logs')
         .select('*').eq('lrn', id).eq('date', today).eq('person_type', 'student').maybeSingle();
 
     const recEl = document.getElementById('actionTodayRecord');
     const btnIn = document.getElementById('actionBtnIn');
+    const btnOut = document.getElementById('actionBtnOut');
+
     if (existing) {
-        document.getElementById('actionTodayIn').textContent = existing.time_in || '—';
+        document.getElementById('actionTodayIn').textContent = (existing.time_in || '---') + ' (' + existing.status + ')';
+        document.getElementById('actionTodayOut').textContent = existing.time_out || '---';
         recEl.classList.remove('hidden');
-        btnIn.classList.add('action-btn-done');
-        btnIn.disabled = true;
-        const subEl = document.getElementById('actionBtnStatus');
-        if (subEl) { subEl.textContent = 'ALREADY RECORDED — ' + existing.status; }
+        if (existing.time_in) { btnIn.classList.add('action-btn-done'); btnIn.disabled = true; }
+        if (existing.time_out) { btnOut.classList.add('action-btn-done'); btnOut.disabled = true; }
     } else {
         recEl.classList.add('hidden');
-        btnIn.classList.remove('action-btn-done');
-        btnIn.disabled = false;
+        btnIn.classList.remove('action-btn-done'); btnIn.disabled = false;
+        btnOut.classList.remove('action-btn-done'); btnOut.disabled = false;
     }
 
     document.getElementById('actionMsg').style.display = 'none';
     showScreen('student-action');
 }
 
-
 async function studentAction(mode) {
-    const id     = currentUser.id;
-    const name   = currentUser.name;
-    const btnIn  = document.getElementById('actionBtnIn');
+    const id = currentUser.id;
+    const name = currentUser.name;
+    const btnIn = document.getElementById('actionBtnIn');
     const btnOut = document.getElementById('actionBtnOut');
-    const msgEl  = document.getElementById('actionMsg');
+    const msgEl = document.getElementById('actionMsg');
+
     btnIn.disabled = true;
     btnOut.disabled = true;
     msgEl.style.display = 'none';
-    await recordAttendance('student', id, name, mode, 'actionMsg');
+
+    const success = await recordAttendance('student', id, name, mode, 'actionMsg');
     msgEl.style.display = 'flex';
+
+    // Refresh today record
     const today = todayDate();
-    const { data: rec } = await db.from('attendance_logs')
+    const { data: updated } = await db.from('attendance_logs')
         .select('*').eq('lrn', id).eq('date', today).eq('person_type', 'student').maybeSingle();
-    if (rec) {
-        document.getElementById('actionTodayIn').textContent  = rec.time_in  ? rec.time_in + ' (' + rec.status + ')' : '—';
-        document.getElementById('actionTodayOut').textContent = rec.time_out || '—';
+    if (updated) {
+        document.getElementById('actionTodayIn').textContent = (updated.time_in || '---') + ' (' + updated.status + ')';
+        document.getElementById('actionTodayOut').textContent = updated.time_out || '---';
         document.getElementById('actionTodayRecord').classList.remove('hidden');
-        if (rec.time_in)  { btnIn.classList.add('action-btn-done');  btnIn.disabled  = true; }
-        else              { btnIn.classList.remove('action-btn-done'); btnIn.disabled = false; }
-        if (rec.time_out) { btnOut.classList.add('action-btn-done'); btnOut.disabled = true; }
-        else              { btnOut.classList.remove('action-btn-done'); btnOut.disabled = false; }
-    } else {
-        btnIn.disabled = false;
-        btnOut.disabled = false;
+        if (updated.time_in) { btnIn.classList.add('action-btn-done'); btnIn.disabled = true; }
+        if (updated.time_out) { btnOut.classList.add('action-btn-done'); btnOut.disabled = true; }
     }
-    setTimeout(() => goBackToScan(), 3000);
+
+    if (success) setTimeout(() => goBackToScan(), 3000);
+    else setTimeout(() => goBackToScan(), 3000);
 }
 
 
@@ -366,43 +367,19 @@ function goBackToScan() {
 // ══════════════════════════════════════════════
 //  TEACHER SCREEN
 // ══════════════════════════════════════════════
-let teacherScanMode = 'IN';
-
-function setTeacherScanMode(mode) {
-    teacherScanMode = mode;
-    document.getElementById('tchModeIn').classList.toggle('active', mode === 'IN');
-    document.getElementById('tchModeOut').classList.toggle('active', mode === 'OUT');
-}
-
-async function startTeacherScanner() {
-    await startQrScanner('teacher-reader', onTeacherScan);
-}
-
-async function onTeacherScan(qrData) {
-    if (scanLock) return;
-    scanLock = true;
-    const parts = qrData.trim().split('|');
-    if (!parts[0] || parts[0].trim().toUpperCase() !== 'STUDENT') { scanLock = false; return; }
-    const [_, id, name] = parts;
-    setStatus('teacherScanStatus', 'info', 'PROCESSING...', 'Please wait');
-    await recordAttendance('student', id.trim(), name ? name.trim() : id.trim(), 'teacherScanStatus');
-    setTimeout(() => { scanLock = false; }, 2000);
-}
-
 async function startTeacherScannerIfNeeded(tabId) {
-    if (tabId === 'teacherScanTab') await startTeacherScanner();
     if (tabId === 'teacherLogsTab') loadLogs('teacher');
     if (tabId === 'teacherTimeTab') loadTeacherOwnTime();
 }
 
 // Teacher logs
 async function loadLogs(role) {
-    const dateId   = role === 'teacher' ? 'teacherDateFilter' : 'adminDateFilter';
-    const typeId   = role === 'teacher' ? 'teacherTypeFilter' : 'adminTypeFilter';
-    const dispId   = role === 'teacher' ? 'teacherLogsDisplay' : 'adminLogsDisplay';
-    const date     = document.getElementById(dateId)?.value || todayDate();
-    const type     = document.getElementById(typeId)?.value || 'student';
-    const display  = document.getElementById(dispId);
+    const dateId = role === 'teacher' ? 'teacherDateFilter' : 'adminDateFilter';
+    const typeId = role === 'teacher' ? 'teacherTypeFilter' : 'adminTypeFilter';
+    const dispId = role === 'teacher' ? 'teacherLogsDisplay' : 'adminLogsDisplay';
+    const date = document.getElementById(dateId)?.value || todayDate();
+    const type = document.getElementById(typeId)?.value || 'student';
+    const display = document.getElementById(dispId);
     if (!display) return;
     display.innerHTML = '<div class="logs-empty">Loading...</div>';
 
@@ -431,9 +408,9 @@ async function loadTeacherOwnTime() {
     const today = todayDate();
     const { data } = await db.from('attendance_logs')
         .select('*').eq('lrn', currentUser.id).eq('date', today).eq('person_type', 'teacher').maybeSingle();
-    document.getElementById('tchTimeIn').textContent  = data?.time_in  || '—';
+    document.getElementById('tchTimeIn').textContent = data?.time_in || '—';
     document.getElementById('tchTimeOut').textContent = data?.time_out || '—';
-    document.getElementById('tchStatus').textContent  = data?.status   || '—';
+    document.getElementById('tchStatus').textContent = data?.status || '—';
 }
 
 async function teacherSelfTimeIn() {
@@ -516,9 +493,9 @@ async function onAdminTabChange(tabId) {
 }
 
 async function startAdminScannerIfNeeded(tabId) {
-    if (tabId === 'adminScanTab')     await startAdminScanner();
-    if (tabId === 'adminLogsTab')     loadLogs('admin');
-    if (tabId === 'adminStatsTab')    loadStats();
+    if (tabId === 'adminScanTab') await startAdminScanner();
+    if (tabId === 'adminLogsTab') loadLogs('admin');
+    if (tabId === 'adminStatsTab') loadStats();
     if (tabId === 'adminStudentsTab') searchPeople();
 }
 
@@ -569,8 +546,8 @@ async function loadStats() {
 
 // People search
 async function searchPeople() {
-    const query  = document.getElementById('peopleSearch')?.value.toLowerCase() || '';
-    const type   = document.getElementById('peopleTypeFilter')?.value || 'student';
+    const query = document.getElementById('peopleSearch')?.value.toLowerCase() || '';
+    const type = document.getElementById('peopleTypeFilter')?.value || 'student';
     const display = document.getElementById('peopleDisplay');
     if (!display) return;
     display.innerHTML = '<div class="logs-empty">Searching...</div>';
@@ -603,7 +580,7 @@ async function exportCSV() {
         .select('*').eq('date', date).eq('person_type', type).order('time_in', { ascending: true });
     if (error || !data?.length) { showToast('No data to export.'); return; }
 
-    const headers = ['LRN/ID','Full Name','Date','Time In','Time Out','Status','Type'];
+    const headers = ['LRN/ID', 'Full Name', 'Date', 'Time In', 'Time Out', 'Status', 'Type'];
     const rows = data.map(r => [r.lrn, r.full_name, r.date, r.time_in, r.time_out || '', r.status, r.person_type]);
     const csv = [headers, ...rows].map(r => r.map(v => `"${v}"`).join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
@@ -616,10 +593,11 @@ async function exportCSV() {
 // ══════════════════════════════════════════════
 //  CORE: RECORD ATTENDANCE
 // ══════════════════════════════════════════════
-async function recordAttendance(personType, lrn, name, statusElId) {
-    const now  = new Date();
+async function recordAttendance(personType, lrn, name, mode, statusElId) {
+    const now = new Date();
     const date = now.toISOString().split('T')[0];
     const time = nowTime();
+    const mins = now.getHours() * 60 + now.getMinutes();
 
     try {
         const { data: existing, error: fetchErr } = await db
@@ -628,22 +606,56 @@ async function recordAttendance(personType, lrn, name, statusElId) {
             .maybeSingle();
         if (fetchErr) throw fetchErr;
 
-        if (existing) {
-            setStatus(statusElId, 'warning', 'ALREADY RECORDED',
-                `${name} — ${existing.status} at ${existing.time_in}`);
-            return false;
+        if (mode === 'IN') {
+            if (existing) {
+                setStatus(statusElId, 'warning', 'ALREADY TIMED IN',
+                    `${name} checked in at ${existing.time_in} — ${existing.status}`);
+                return false;
+            }
+            // TIME IN status rules:
+            // On Time  : 7:34 and earlier
+            // Late     : 7:35 – 11:59
+            // Half Day : 12:00 PM and later
+            let status;
+            if (mins <= 7 * 60 + 34) status = 'On Time';
+            else if (mins < 12 * 60) status = 'Late';
+            else status = 'Half Day';
+
+            const { error: insErr } = await db.from('attendance_logs').insert({
+                lrn, full_name: name, date, time_in: time, status, person_type: personType
+            });
+            if (insErr) throw insErr;
+            setStatus(statusElId, 'success', `TIME IN — ${status}`, `${name} at ${time}`);
+            flashSuccess(); showToast(`✓ ${name} — ${status}`);
+            return true;
+
+        } else {
+            // TIME OUT
+            if (!existing) {
+                setStatus(statusElId, 'error', 'NO TIME IN RECORD', `${name} hasn't timed in today.`);
+                return false;
+            }
+            if (existing.time_out) {
+                setStatus(statusElId, 'warning', 'ALREADY TIMED OUT', `${name} left at ${existing.time_out}`);
+                return false;
+            }
+            // TIME OUT status rules:
+            // If time out is between 12:00 and before 4:00 PM → Half Day
+            // If time out is 4:00 PM or later → keep original time-in status (Full day)
+            const h = now.getHours();
+            let updatedStatus = existing.status; // keep original by default
+            if (h >= 12 && h < 16) {
+                updatedStatus = 'Half Day'; // timed out before 4PM = half day
+            }
+
+            const { error: updErr } = await db.from('attendance_logs')
+                .update({ time_out: time, status: updatedStatus })
+                .eq('id', existing.id);
+            if (updErr) throw updErr;
+            setStatus(statusElId, 'success', `TIME OUT — ${updatedStatus}`, `${name} at ${time}`);
+            flashSuccess(); showToast(`✓ ${name} timed out`);
+            return true;
         }
-
-        const status = getAttendanceStatus(now);
-        const { error: insErr } = await db.from('attendance_logs').insert({
-            lrn, full_name: name, date, time_in: time, status, person_type: personType
-        });
-        if (insErr) throw insErr;
-
-        setStatus(statusElId, 'success', `TIME IN — ${status}`, `${name} at ${time}`);
-        flashSuccess();
-        showToast(`✓ ${name} — ${status}`);
-        return true;
     } catch (e) {
         setStatus(statusElId, 'error', 'DATABASE ERROR', e.message || 'Unknown error');
         console.error(e);
@@ -687,9 +699,9 @@ function initUploadTab() {
     const today = todayDate();
     const firstDay = today.slice(0, 8) + '01';
     const fromEl = document.getElementById('uploadDateFrom');
-    const toEl   = document.getElementById('uploadDateTo');
+    const toEl = document.getElementById('uploadDateTo');
     if (fromEl && !fromEl.value) fromEl.value = firstDay;
-    if (toEl   && !toEl.value)   toEl.value   = today;
+    if (toEl && !toEl.value) toEl.value = today;
     if (uploadUnlocked) showUploadPanel();
     loadUploadHistory();
 }
@@ -750,45 +762,45 @@ function buildWorkbook(data, dateFrom, dateTo) {
     ]));
 
     const ws1 = XLSX.utils.aoa_to_sheet(allRows);
-    ws1['!cols'] = [16,28,10,12,12,12,10].map(w => ({ wch: w }));
-    ws1['!merges'] = [{ s:{r:0,c:0}, e:{r:0,c:6} }, { s:{r:1,c:0}, e:{r:1,c:6} }, { s:{r:2,c:0}, e:{r:2,c:6} }];
+    ws1['!cols'] = [16, 28, 10, 12, 12, 12, 10].map(w => ({ wch: w }));
+    ws1['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 6 } }, { s: { r: 1, c: 0 }, e: { r: 1, c: 6 } }, { s: { r: 2, c: 0 }, e: { r: 2, c: 6 } }];
     XLSX.utils.book_append_sheet(wb, ws1, 'All Records');
 
     // ── Sheet 2: Students only ──
     const students = data.filter(r => (r.person_type || 'student') === 'student');
     if (students.length) {
-        const stuRows = [['LRN','Full Name','Date','Time In','Time Out','Status']];
-        students.forEach(r => stuRows.push([r.lrn, r.full_name, r.date, r.time_in||'—', r.time_out||'—', r.status||'—']));
+        const stuRows = [['LRN', 'Full Name', 'Date', 'Time In', 'Time Out', 'Status']];
+        students.forEach(r => stuRows.push([r.lrn, r.full_name, r.date, r.time_in || '—', r.time_out || '—', r.status || '—']));
         const ws2 = XLSX.utils.aoa_to_sheet(stuRows);
-        ws2['!cols'] = [16,28,12,12,12,10].map(w => ({ wch: w }));
+        ws2['!cols'] = [16, 28, 12, 12, 12, 10].map(w => ({ wch: w }));
         XLSX.utils.book_append_sheet(wb, ws2, 'Students');
     }
 
     // ── Sheet 3: Teachers only ──
     const teachers = data.filter(r => r.person_type === 'teacher');
     if (teachers.length) {
-        const tchRows = [['ID','Full Name','Date','Time In','Time Out','Status']];
-        teachers.forEach(r => tchRows.push([r.lrn, r.full_name, r.date, r.time_in||'—', r.time_out||'—', r.status||'—']));
+        const tchRows = [['ID', 'Full Name', 'Date', 'Time In', 'Time Out', 'Status']];
+        teachers.forEach(r => tchRows.push([r.lrn, r.full_name, r.date, r.time_in || '—', r.time_out || '—', r.status || '—']));
         const ws3 = XLSX.utils.aoa_to_sheet(tchRows);
-        ws3['!cols'] = [16,28,12,12,12,10].map(w => ({ wch: w }));
+        ws3['!cols'] = [16, 28, 12, 12, 12, 10].map(w => ({ wch: w }));
         XLSX.utils.book_append_sheet(wb, ws3, 'Teachers');
     }
 
     // ── Sheet 4: Summary ──
     const byDate = {};
     data.forEach(r => {
-        if (!byDate[r.date]) byDate[r.date] = { students:0, teachers:0, late:0, ontime:0 };
-        if ((r.person_type||'student') === 'student') byDate[r.date].students++;
+        if (!byDate[r.date]) byDate[r.date] = { students: 0, teachers: 0, late: 0, ontime: 0 };
+        if ((r.person_type || 'student') === 'student') byDate[r.date].students++;
         if (r.person_type === 'teacher') byDate[r.date].teachers++;
         if (r.status === 'Late') byDate[r.date].late++;
         if (r.status === 'On Time') byDate[r.date].ontime++;
     });
-    const sumRows = [['Date','Students Present','Teachers Present','On Time','Late']];
+    const sumRows = [['Date', 'Students Present', 'Teachers Present', 'On Time', 'Late']];
     Object.entries(byDate).sort().forEach(([date, v]) =>
         sumRows.push([date, v.students, v.teachers, v.ontime, v.late])
     );
     const ws4 = XLSX.utils.aoa_to_sheet(sumRows);
-    ws4['!cols'] = [14,18,18,12,10].map(w => ({ wch: w }));
+    ws4['!cols'] = [14, 18, 18, 12, 10].map(w => ({ wch: w }));
     XLSX.utils.book_append_sheet(wb, ws4, 'Summary');
 
     return wb;
@@ -798,8 +810,8 @@ function buildWorkbook(data, dateFrom, dateTo) {
 async function exportAndUpload() {
     const statusEl = document.getElementById('uploadStatus');
     const dateFrom = document.getElementById('uploadDateFrom').value || todayDate();
-    const dateTo   = document.getElementById('uploadDateTo').value   || todayDate();
-    const type     = document.getElementById('uploadType').value     || 'all';
+    const dateTo = document.getElementById('uploadDateTo').value || todayDate();
+    const type = document.getElementById('uploadType').value || 'all';
 
     statusEl.className = 'status-box info';
     statusEl.innerHTML = '<span class="status-dot"></span><div><strong>PREPARING...</strong><p>Fetching attendance records</p></div>';
@@ -814,9 +826,9 @@ async function exportAndUpload() {
 
         statusEl.innerHTML = '<span class="status-dot"></span><div><strong>BUILDING XLSX...</strong><p>Creating spreadsheet with ' + data.length + ' records</p></div>';
 
-        const wb       = buildWorkbook(data, dateFrom, dateTo);
-        const wbArray  = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-        const blob     = new Blob([wbArray], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        const wb = buildWorkbook(data, dateFrom, dateTo);
+        const wbArray = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+        const blob = new Blob([wbArray], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
         const fileName = `attendance_${dateFrom}_to_${dateTo}_${type}_${Date.now()}.xlsx`;
 
         statusEl.innerHTML = '<span class="status-dot"></span><div><strong>UPLOADING...</strong><p>Sending to Supabase Storage</p></div>';
@@ -842,7 +854,7 @@ async function exportAndUpload() {
             date_to: dateTo,
             record_count: data.length,
             file_url: urlData?.publicUrl || ''
-        }).then(() => {});
+        }).then(() => { });
 
         setStatus('uploadStatus', 'success', 'UPLOAD SUCCESS ✓', `${data.length} records → ${fileName}`);
         showToast('✓ File uploaded to Supabase!');
@@ -861,8 +873,8 @@ async function exportAndUpload() {
 async function downloadOnly() {
     const statusEl = document.getElementById('uploadStatus');
     const dateFrom = document.getElementById('uploadDateFrom').value || todayDate();
-    const dateTo   = document.getElementById('uploadDateTo').value   || todayDate();
-    const type     = document.getElementById('uploadType').value     || 'all';
+    const dateTo = document.getElementById('uploadDateTo').value || todayDate();
+    const type = document.getElementById('uploadType').value || 'all';
 
     statusEl.className = 'status-box info';
     statusEl.innerHTML = '<span class="status-dot"></span><div><strong>PREPARING...</strong><p>Fetching records...</p></div>';
@@ -871,9 +883,9 @@ async function downloadOnly() {
     try {
         const data = await fetchAttendanceForExport(dateFrom, dateTo, type);
         if (!data.length) { setStatus('uploadStatus', 'warning', 'NO DATA', 'No records found.'); return; }
-        const wb      = buildWorkbook(data, dateFrom, dateTo);
+        const wb = buildWorkbook(data, dateFrom, dateTo);
         const wbArray = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-        const blob    = new Blob([wbArray], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        const blob = new Blob([wbArray], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
         const fileName = `attendance_${dateFrom}_to_${dateTo}.xlsx`;
         triggerDownload(blob, fileName);
         setStatus('uploadStatus', 'success', 'DOWNLOADED ✓', `${data.length} records saved as ${fileName}`);
@@ -884,7 +896,7 @@ async function downloadOnly() {
 
 function triggerDownload(blob, fileName) {
     const url = URL.createObjectURL(blob);
-    const a   = document.createElement('a');
+    const a = document.createElement('a');
     a.href = url; a.download = fileName; a.click();
     URL.revokeObjectURL(url);
 }
@@ -924,9 +936,9 @@ function initPCPanels() {
     function updatePCClock() {
         const now = new Date();
         const clockEl = document.getElementById('pcClock');
-        const dateEl  = document.getElementById('pcDate');
+        const dateEl = document.getElementById('pcDate');
         if (clockEl) clockEl.textContent = now.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-        if (dateEl)  dateEl.textContent  = now.toLocaleDateString('en-PH', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+        if (dateEl) dateEl.textContent = now.toLocaleDateString('en-PH', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
     }
     updatePCClock();
     setInterval(updatePCClock, 1000);
@@ -946,12 +958,122 @@ async function loadPCStats() {
         db.from('attendance_logs').select('id', { count: 'exact', head: true }).eq('date', today).eq('person_type', 'teacher'),
     ]);
     const el = (id) => document.querySelector(`#${id} .pc-stat-num`);
-    if (el('pcStatPresent'))  el('pcStatPresent').textContent  = stuRes.count  ?? '—';
-    if (el('pcStatLate'))     el('pcStatLate').textContent     = lateRes.count ?? '—';
-    if (el('pcStatTeachers')) el('pcStatTeachers').textContent = tchRes.count  ?? '—';
+    if (el('pcStatPresent')) el('pcStatPresent').textContent = stuRes.count ?? '—';
+    if (el('pcStatLate')) el('pcStatLate').textContent = lateRes.count ?? '—';
+    if (el('pcStatTeachers')) el('pcStatTeachers').textContent = tchRes.count ?? '—';
 }
 
 // Init on load
 document.addEventListener('DOMContentLoaded', () => {
     initPCPanels();
+    scheduleMidnightReset();
 });
+
+// ══════════════════════════════════════════════
+//  MIDNIGHT AUTO-SAVE & RESET
+//  At 12:00 AM: saves today's attendance as
+//  YYYY-MM-DD.xlsx to the "logs" Supabase bucket,
+//  then resets the UI back to the login screen.
+// ══════════════════════════════════════════════
+function scheduleMidnightReset() {
+    const now = new Date();
+    const midnight = new Date(now);
+    midnight.setHours(12, 0, 0, 0); // next 12:00 AM
+    const msUntilMidnight = midnight - now;
+
+    setTimeout(async () => {
+        await midnightSaveAndReset();
+        // Re-schedule for the next night
+        scheduleMidnightReset();
+    }, msUntilMidnight);
+
+    console.log(`[PRESENCE] Midnight reset scheduled in ${Math.round(msUntilMidnight / 60000)} min`);
+}
+
+async function midnightSaveAndReset() {
+    const dateStr = todayDate(); // still "today" at the moment this fires (just before midnight ticks)
+
+    try {
+        // ── 1. Fetch all of today's records ──
+        const { data, error } = await db.from('attendance_logs')
+            .select('*')
+            .eq('date', dateStr)
+            .order('person_type', { ascending: true })
+            .order('time_in', { ascending: true });
+
+        if (error) throw error;
+
+        if (data && data.length > 0) {
+            // ── 2. Build XLSX workbook ──
+            const wb = buildWorkbook(data, dateStr, dateStr);
+            const wbArray = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+            const blob = new Blob([wbArray], {
+                type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            });
+            const fileName = `${dateStr}.xlsx`;
+
+            // ── 3. Upload to "logs" bucket ──
+            const { error: uploadErr } = await db.storage
+                .from('logs')
+                .upload(fileName, blob, {
+                    contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                    upsert: true   // overwrite if same date runs twice
+                });
+
+            if (uploadErr) throw uploadErr;
+
+            // ── 4. Log the upload ──
+            await db.from('upload_logs').insert({
+                file_name: fileName,
+                uploaded_by: 'AUTO (midnight reset)',
+                date_from: dateStr,
+                date_to: dateStr,
+                record_count: data.length,
+                file_url: db.storage.from('logs').getPublicUrl(fileName)?.data?.publicUrl || ''
+            });
+
+            console.log(`[PRESENCE] Midnight save OK → logs/${fileName} (${data.length} records)`);
+            showToast(`✓ Daily log saved: ${fileName}`);
+
+            // ── 5. Clear today's records so everyone can time in fresh ──
+            const { error: deleteErr } = await db.from('attendance_logs')
+                .delete()
+                .eq('date', dateStr);
+            if (deleteErr) throw deleteErr;
+            console.log(`[PRESENCE] Cleared ${data.length} records for ${dateStr} — table reset.`);
+
+        } else {
+            console.log(`[PRESENCE] Midnight: no records for ${dateStr}, skipping save.`);
+        }
+    } catch (err) {
+        console.error('[PRESENCE] Midnight save error:', err);
+    }
+
+    // ── 5. Reset app to login screen ──
+    try {
+        activeScanner = await stopScanner(activeScanner);
+        loginScanner = await stopScanner(loginScanner);
+    } catch (_) { }
+
+    currentUser = null;
+    scanLock = false;
+    scanMode = 'IN';
+    uploadUnlocked = false;
+
+    if (clockInterval) { clearInterval(clockInterval); clockInterval = null; }
+
+    // Reset login button
+    const btn = document.getElementById('loginScanBtn');
+    if (btn) {
+        btn.style.display = 'flex';
+        btn.disabled = false;
+        btn.innerHTML = '<span class="btn-icon">📷</span> ACTIVATE CAMERA';
+    }
+    const readerEl = document.getElementById('login-reader');
+    if (readerEl) readerEl.innerHTML = '';
+
+    setStatus('loginStatus', 'info', 'SYSTEM READY', 'Press button to scan your ID card');
+    showScreen('login');
+
+    console.log('[PRESENCE] Midnight reset complete — back to login screen.');
+}
