@@ -28,7 +28,10 @@ let scanLock = false;  // debounce
 // ── Boot ─────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
     // Login button
-    document.getElementById('loginScanBtn').addEventListener('click', startLoginScanner);
+    document.getElementById('loginScanBtn').addEventListener('click', (e) => {
+        e.preventDefault();
+        startLoginScanner();
+    });
 
     // Teacher tabs
     wireTabNav('teacherNav', startTeacherScannerIfNeeded);
@@ -105,18 +108,10 @@ async function stopScanner(ref) {
 // ── LOGIN SCANNER ─────────────────────────────
 async function startLoginScanner() {
     const btn = document.getElementById('loginScanBtn');
-    const status = document.getElementById('loginStatus');
+    if (btn.disabled) return;  // prevent double-call
     btn.disabled = true;
     btn.textContent = '⏳ STARTING CAMERA...';
     setStatus('loginStatus', 'info', 'CAMERA STARTING', 'Please allow camera permission if prompted.');
-
-    try {
-        await navigator.mediaDevices.getUserMedia({ video: true });
-    } catch (err) {
-        setStatus('loginStatus', 'error', 'PERMISSION DENIED', 'Allow camera access in browser settings, then refresh.');
-        btn.disabled = false; btn.innerHTML = '<span class="btn-icon">📷</span> ACTIVATE CAMERA';
-        return;
-    }
 
     const readerEl = document.getElementById('login-reader');
     readerEl.innerHTML = '';
@@ -135,7 +130,11 @@ async function startLoginScanner() {
         btn.style.display = 'none';
         setStatus('loginStatus', 'info', 'CAMERA ACTIVE', 'Scan your ID card now');
     } catch (err) {
-        setStatus('loginStatus', 'error', 'CAMERA ERROR', err.message || String(err));
+        const msg = (err && err.name === 'NotAllowedError')
+            ? 'Allow camera access in browser settings, then refresh.'
+            : (err.message || String(err));
+        const title = (err && err.name === 'NotAllowedError') ? 'PERMISSION DENIED' : 'CAMERA ERROR';
+        setStatus('loginStatus', 'error', title, msg);
         btn.disabled = false; btn.innerHTML = '<span class="btn-icon">📷</span> ACTIVATE CAMERA';
     }
 }
@@ -978,7 +977,7 @@ document.addEventListener('DOMContentLoaded', () => {
 function scheduleMidnightReset() {
     const now = new Date();
     const midnight = new Date(now);
-    midnight.setHours(12, 0, 0, 0); // next 12:00 AM
+    midnight.setHours(24, 0, 0, 0); // next true midnight (00:00 AM next day)
     const msUntilMidnight = midnight - now;
 
     setTimeout(async () => {
