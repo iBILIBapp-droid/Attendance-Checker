@@ -390,15 +390,59 @@ async function loadLogs(role) {
     if (!data?.length) { display.innerHTML = '<div class="logs-empty">No records found for this date.</div>'; return; }
 
     display.innerHTML = data.map(log => {
-        const statusClass = log.status === 'Late' ? 'late' : log.status === 'Half Day' ? 'halfday' : log.status === 'No Time Out' ? 'noout' : 'ontime';
-        return `<div class="log-item">
+        const statusClass = log.status === 'Late' ? 'late' : log.status === 'Half Day' ? 'halfday' : log.status === 'No Time Out' ? 'noout' : log.status === 'Cutting Class' ? 'cutting' : 'ontime';
+        const noTimeOut = !log.time_out;
+        const forceBtn = noTimeOut
+            ? `<button class="force-out-btn" onclick="forceStudentTimeOut('${log.id}', '${log.full_name.replace(/'/g, "\\'")}', '${role}')">⏏ OUT</button>`
+            : '';
+        return `<div class="log-item" id="log-row-${log.id}">
             <div>
                 <span class="log-name">${log.full_name}</span>
                 <span class="log-meta">IN: ${log.time_in || '—'} &nbsp;|&nbsp; OUT: ${log.time_out || '—'} &nbsp;|&nbsp; ID: ${log.lrn}</span>
             </div>
-            <span class="log-status ${statusClass}">${log.status}</span>
+            <div style="display:flex;align-items:center;gap:6px;">
+                ${forceBtn}
+                <span class="log-status ${statusClass}">${log.status}</span>
+            </div>
         </div>`;
     }).join('');
+}
+
+// ── Per-student force time out (from logs list) ──────────────────────────────
+async function forceStudentTimeOut(logId, name, role) {
+    const now = new Date();
+    const hours = now.getHours();
+    const timeNow = nowTime();
+
+    // Determine status: before 4PM = Half Day, 4PM-6PM = Full Day, after 6PM = Cutting Class
+    let updatedStatus;
+    if (hours >= 18) {
+        updatedStatus = 'Cutting Class';
+    } else if (hours >= 12 && hours < 16) {
+        updatedStatus = 'Half Day';
+    } else {
+        updatedStatus = 'No Time Out'; // timed out very early (shouldn't happen often)
+    }
+
+    const { error } = await db.from('attendance_logs')
+        .update({ time_out: timeNow, status: updatedStatus })
+        .eq('id', logId);
+
+    if (error) { showToast(`Error: ${error.message}`); return; }
+
+    showToast(`✓ ${name} timed out — ${updatedStatus}`);
+
+    // Update the row in-place without full reload
+    const row = document.getElementById(`log-row-${logId}`);
+    if (row) {
+        const statusClass = updatedStatus === 'Cutting Class' ? 'cutting' : updatedStatus === 'Half Day' ? 'halfday' : 'noout';
+        const metaEl = row.querySelector('.log-meta');
+        if (metaEl) metaEl.innerHTML = metaEl.innerHTML.replace(/OUT: —/, `OUT: ${timeNow}`);
+        const btn = row.querySelector('.force-out-btn');
+        if (btn) btn.remove();
+        const statusEl = row.querySelector('.log-status');
+        if (statusEl) { statusEl.className = `log-status ${statusClass}`; statusEl.textContent = updatedStatus; }
+    }
 }
 
 // Teacher's own time in/out
@@ -456,6 +500,101 @@ async function teacherSelfTimeOut() {
     msgEl.style.display = 'flex';
     loadTeacherOwnTime();
     showToast(`Time Out recorded at ${time}`);
+}
+
+// ── TEACHER: Force Time Out All Remaining Students ───────────────────────────
+// Called by teacher to close attendance. Any student/teacher who has no
+// time_out yet will be evaluated:
+//   • If current time is BEFORE 6:00 PM  → warn teacher (can still proceed)
+//   • Students with no time_out           → marked as "Cutting Class"
+//   • Teachers with no time_out           → marked as "No Time Out"
+async function teacherForceTimeOut(msgElId = 'forceTimeOutMsg') {
+    const msgEl = document.getElementById(msgElId);
+    if (!msgEl) return;
+
+    const now = new Date();
+    const hours = now.getHours();
+    const mins = now.getMinutes();
+    const totalMins = hours * 60 + mins;
+    const cutoffMins = 18 * 60; // 6:00 PM
+
+    // Warn if before 6:00 PM — require confirmation
+    if (totalMins < cutoffMins) {
+        const timeStr = now.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' });
+        const confirmed = confirm(
+            `⚠️ It is only ${timeStr}.\n\n` +
+            `Students who have not timed out will be marked as CUTTING CLASS.\n\n` +
+            `Are you sure you want to close attendance now?`
+        );
+        if (!confirmed) return;
+    }
+
+    setStatus(msgElId, 'info', 'PROCESSING...', 'Closing attendance for today. Please wait.');
+    msgEl.style.display = 'flex';
+
+    const today = todayDate();
+    const timeNow = nowTime();
+
+    try {
+        // Fetch all records with no time_out for today
+        const { data: openRecords, error: fetchErr } = await db
+            .from('attendance_logs')
+            .select('id, full_name, person_type')
+            .eq('date', today)
+            .is('time_out', null);
+
+        if (fetchErr) throw fetchErr;
+
+        if (!openRecords || openRecords.length === 0) {
+            setStatus(msgElId, 'success', 'ALL CLEAR ✓', 'All students already have a time-out recorded.');
+            msgEl.style.display = 'flex';
+            return;
+        }
+
+        // Separate students and teachers
+        const students = openRecords.filter(r => r.person_type === 'student');
+        const teachers = openRecords.filter(r => r.person_type === 'teacher');
+
+        let updatedCount = 0;
+
+        // Mark students without time-out as Cutting Class
+        if (students.length > 0) {
+            const studentIds = students.map(r => r.id);
+            const { error: stuErr } = await db
+                .from('attendance_logs')
+                .update({ time_out: timeNow, status: 'Cutting Class' })
+                .in('id', studentIds);
+            if (stuErr) throw stuErr;
+            updatedCount += students.length;
+        }
+
+        // Mark teachers without time-out as No Time Out
+        if (teachers.length > 0) {
+            const teacherIds = teachers.map(r => r.id);
+            const { error: tchErr } = await db
+                .from('attendance_logs')
+                .update({ time_out: timeNow, status: 'No Time Out' })
+                .in('id', teacherIds);
+            if (tchErr) throw tchErr;
+            updatedCount += teachers.length;
+        }
+
+        const detail = students.length > 0
+            ? `${students.length} student(s) marked CUTTING CLASS, ${teachers.length} teacher(s) marked NO TIME OUT.`
+            : `${teachers.length} teacher(s) marked NO TIME OUT.`;
+
+        setStatus(msgElId, 'success', `ATTENDANCE CLOSED ✓`, detail);
+        msgEl.style.display = 'flex';
+        showToast(`✓ Attendance closed — ${updatedCount} record(s) updated`);
+
+        // Refresh logs if visible
+        loadLogs('teacher');
+
+    } catch (e) {
+        setStatus(msgElId, 'error', 'ERROR', e.message || 'Unknown error');
+        msgEl.style.display = 'flex';
+        console.error(e);
+    }
 }
 
 // ══════════════════════════════════════════════

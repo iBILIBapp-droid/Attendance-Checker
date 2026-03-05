@@ -477,6 +477,24 @@ body {
     background: #333;
 }
 
+.btn-danger {
+    width: 100%;
+    padding: 14px;
+    background: #c0392b;
+    color: var(--white);
+    border: none;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 16px;
+    letter-spacing: 3px;
+    cursor: pointer;
+    transition: background 0.2s;
+    border-radius: 6px;
+}
+
+.btn-danger:hover {
+    background: #96281b;
+}
+
 .btn-small {
     padding: 8px 16px;
     background: var(--dark);
@@ -1917,6 +1935,30 @@ body {
 .log-status.noout {
     background: #F3E5F5;
     color: #6A1B9A;
+}
+
+.log-status.cutting {
+    background: #FFEBEE;
+    color: #B71C1C;
+    font-weight: 800;
+}
+
+.force-out-btn {
+    padding: 4px 10px;
+    background: #c0392b;
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    font-size: 10px;
+    font-family: 'Bebas Neue', sans-serif;
+    letter-spacing: 1px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s;
+}
+
+.force-out-btn:hover {
+    background: #96281b;
 }
 
 /* ── SINGLE BIG TIME IN BUTTON ───────────────── */
