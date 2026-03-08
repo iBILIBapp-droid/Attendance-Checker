@@ -1401,314 +1401,420 @@ body {
 }
 
 /* ══════════════════════════════════════════════
-   RESPONSIVE — PHONE OPTIMIZED
+   DEVICE BADGE — shows briefly on load
 ══════════════════════════════════════════════ */
-
-/* ── BASE: MOBILE FIRST (all phones) ─────────── */
-html,
-body {
-    width: 100%;
-    max-width: 100%;
-    overflow-x: hidden;
+.device-badge {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    z-index: 99999;
+    background: rgba(10, 10, 10, 0.88);
+    color: var(--gold);
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 13px;
+    letter-spacing: 3px;
+    padding: 8px 16px;
+    border: 1px solid rgba(200, 16, 46, 0.4);
+    border-radius: 8px;
+    backdrop-filter: blur(10px);
+    opacity: 0;
+    transform: translateY(-8px);
+    transition: opacity 0.35s ease, transform 0.35s ease;
+    pointer-events: none;
 }
 
-.container {
-    width: 100%;
-    max-width: 100%;
-}
-
-.screen.active {
-    width: 100%;
-    min-height: 100vh;
-}
-
-/* ── SMALL PHONE (under 380px — e.g. iPhone SE) ── */
-@media (max-width: 380px) {
-    .login-brand h1 {
-        font-size: 34px;
-        letter-spacing: 6px;
-    }
-
-    .login-hero {
-        padding: 24px 18px 14px;
-    }
-
-    .login-card {
-        padding: 16px 14px 20px;
-        gap: 10px;
-    }
-
-    .action-name {
-        font-size: 22px;
-    }
-
-    .action-time {
-        font-size: 34px;
-    }
-
-    .action-btn-in,
-    .action-btn-out {
-        padding: 16px 8px;
-    }
-
-    .action-btn-label {
-        font-size: 14px;
-    }
-
-    .action-btn-icon {
-        font-size: 22px;
-    }
-
-    .tab-btn {
-        font-size: 10px;
-        padding: 10px 4px;
-    }
-
-    #login-reader.reader-box,
-    #student-reader.reader-box,
-    #teacher-reader.reader-box,
-    #admin-reader.reader-box {
-        height: 190px !important;
-    }
-}
-
-/* ── NORMAL PHONE (380px–480px — e.g. iPhone 14, Galaxy S) ── */
-@media (min-width: 380px) and (max-width: 480px) {
-    .login-brand h1 {
-        font-size: 44px;
-    }
-
-    .login-hero {
-        padding: 32px 22px 18px;
-    }
-
-    .login-card {
-        padding: 20px 18px 24px;
-        gap: 13px;
-    }
-
-    .action-name {
-        font-size: 30px;
-    }
-
-    .action-time {
-        font-size: 46px;
-    }
-
-    .action-btn-in,
-    .action-btn-out {
-        padding: 24px 10px;
-    }
-
-    .action-btn-label {
-        font-size: 17px;
-    }
-
-    .action-btn-icon {
-        font-size: 28px;
-    }
-
-    #login-reader.reader-box,
-    #student-reader.reader-box,
-    #teacher-reader.reader-box,
-    #admin-reader.reader-box {
-        height: 230px !important;
-    }
-}
-
-/* ── LARGE PHONE (480px–600px — e.g. iPhone Pro Max, Galaxy Ultra) ── */
-@media (min-width: 480px) and (max-width: 600px) {
-    .login-brand h1 {
-        font-size: 50px;
-    }
-
-    .login-hero {
-        padding: 36px 26px 20px;
-    }
-
-    .login-card {
-        padding: 24px 22px 28px;
-        gap: 15px;
-    }
-
-    .action-name {
-        font-size: 36px;
-    }
-
-    .action-time {
-        font-size: 56px;
-    }
-
-    .action-btn-in,
-    .action-btn-out {
-        padding: 30px 12px;
-    }
-
-    .action-btn-label {
-        font-size: 20px;
-    }
-
-    .action-btn-icon {
-        font-size: 32px;
-    }
-
-    #login-reader.reader-box,
-    #student-reader.reader-box,
-    #teacher-reader.reader-box,
-    #admin-reader.reader-box {
-        height: 260px !important;
-    }
+.device-badge.visible {
+    opacity: 1;
+    transform: translateY(0);
 }
 
 /* ══════════════════════════════════════════════
-   PC / TABLET (600px+) — Split layout
-══════════════════════════════════════════════ */
-@media (min-width: 600px) {
-
-    /* Full page dark background */
-    body {
-        background: #0d0d0d;
-        display: grid;
-        grid-template-columns: 1fr 420px 1fr;
-        grid-template-rows: 1fr;
-        align-items: center;
-        min-height: 100vh;
-        padding: 0;
-        gap: 0;
-    }
-
-    /* Left panel — branding */
-    body::before {
-        content: '';
-        display: block;
-        grid-column: 1;
-        grid-row: 1;
-    }
-
-    /* Left side decorative panel */
-    body::after {
-        content: '';
-        position: fixed;
-        left: 0;
-        top: 0;
-        width: calc(50vw - 210px);
-        height: 100vh;
-        background: linear-gradient(135deg, rgba(200, 16, 46, 0.12) 0%, transparent 70%);
-        border-right: 1px solid rgba(200, 16, 46, 0.08);
-        pointer-events: none;
-        z-index: 0;
-    }
-
-    /* Right side panel */
-    .pc-right-panel {
-        display: block !important;
-    }
-
-    /* App container — phone frame in center column */
-    .container {
-        grid-column: 2;
-        grid-row: 1;
-        width: 100%;
-        max-width: 420px;
-        height: 90vh;
-        max-height: 820px;
-        border-radius: 40px;
-        overflow: hidden;
-        box-shadow:
-            0 0 0 8px #1a1a1a,
-            0 0 0 10px #222,
-            0 40px 100px rgba(0, 0, 0, 0.8),
-            0 0 60px rgba(200, 16, 46, 0.08);
-        position: relative;
-        z-index: 1;
-        display: flex;
-        flex-direction: column;
-    }
-
-    /* Notch effect on top of phone frame */
-    .container::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 50%;
-        transform: translateX(-50%);
-        width: 100px;
-        height: 28px;
-        background: #1a1a1a;
-        border-radius: 0 0 18px 18px;
-        z-index: 100;
-    }
-
-    .screen.active {
-        min-height: 0;
-        flex: 1;
-        overflow-y: auto;
-        overflow-x: hidden;
-    }
-
-    .login-wrap,
-    .action-wrap {
-        min-height: 100%;
-    }
-
-    .app-body {
-        overflow-y: auto;
-        flex: 1;
-    }
-
-    /* Left branding panel content */
-    .pc-left-panel {
-        grid-column: 1;
-        grid-row: 1;
-        display: flex !important;
-        flex-direction: column;
-        justify-content: center;
-        padding: 60px 40px 60px 60px;
-        position: relative;
-        z-index: 1;
-    }
-
-    .pc-right-panel {
-        grid-column: 3;
-        grid-row: 1;
-        display: flex !important;
-        flex-direction: column;
-        justify-content: center;
-        padding: 60px 60px 60px 40px;
-        position: relative;
-        z-index: 1;
-    }
-}
-
-/* ── WIDE PC (1400px+) ────────────────────────── */
-@media (min-width: 1400px) {
-    body {
-        grid-template-columns: 1fr 440px 1fr;
-    }
-
-    .container {
-        max-width: 440px;
-        height: 88vh;
-    }
-
-    .pc-left-panel {
-        padding: 60px 40px 60px 100px;
-    }
-
-    .pc-right-panel {
-        padding: 60px 100px 60px 40px;
-    }
-}
-
-/* ══════════════════════════════════════════════
-   PC SIDE PANELS
+   PC SIDE PANELS — hidden by default, shown on PC
 ══════════════════════════════════════════════ */
 .pc-left-panel,
 .pc-right-panel {
     display: none;
-    /* hidden on mobile, shown via media query */
 }
 
+/* ══════════════════════════════════════════════
+   PHONE LAYOUT  (device-phone class on <html>)
+   Full-width single-column, tall camera, large touch targets
+══════════════════════════════════════════════ */
+html.device-phone body {
+    background: var(--dark);
+    display: block;
+    width: 100%;
+    overflow-x: hidden;
+}
+
+html.device-phone .container {
+    width: 100%;
+    max-width: 100%;
+    border-radius: 0;
+    box-shadow: none;
+    height: auto;
+    min-height: 100vh;
+}
+
+html.device-phone .screen.active {
+    width: 100%;
+    min-height: 100vh;
+}
+
+html.device-phone .pc-left-panel,
+html.device-phone .pc-right-panel {
+    display: none !important;
+}
+
+/* Phone: login hero — big, bold, finger-friendly */
+html.device-phone .login-hero {
+    padding: 40px 28px 24px;
+}
+
+html.device-phone .login-brand h1 {
+    font-size: 48px;
+    letter-spacing: 10px;
+}
+
+html.device-phone .login-card {
+    padding: 22px 20px 28px;
+    gap: 14px;
+    border-radius: 28px 28px 0 0;
+}
+
+/* Phone: camera tall for easy scanning */
+html.device-phone #login-reader.reader-box,
+html.device-phone #student-reader.reader-box,
+html.device-phone #teacher-reader.reader-box,
+html.device-phone #admin-reader.reader-box {
+    height: 280px !important;
+    border-radius: 10px;
+}
+
+/* Phone: bigger buttons (easier tap targets) */
+html.device-phone .btn-primary {
+    font-size: 18px;
+    padding: 18px;
+    letter-spacing: 5px;
+}
+
+html.device-phone .btn-secondary {
+    padding: 16px;
+    font-size: 16px;
+}
+
+html.device-phone .mode-btn {
+    padding: 15px 8px;
+    font-size: 16px;
+}
+
+html.device-phone .tab-btn {
+    padding: 14px 8px;
+    font-size: 12px;
+}
+
+/* Phone: action page — large clock, big action buttons */
+html.device-phone .action-name {
+    font-size: 32px;
+}
+
+html.device-phone .action-time {
+    font-size: 52px;
+}
+
+html.device-phone .action-btn-in,
+html.device-phone .action-btn-out {
+    padding: 30px 12px;
+    border-radius: 8px;
+}
+
+html.device-phone .action-btn-icon {
+    font-size: 32px;
+}
+
+html.device-phone .action-btn-label {
+    font-size: 20px;
+}
+
+/* Phone: small (< 380px — SE etc.) */
+@media (max-width: 380px) {
+    html.device-phone .login-brand h1 { font-size: 36px; letter-spacing: 7px; }
+    html.device-phone .login-hero { padding: 26px 18px 16px; }
+    html.device-phone .login-card { padding: 16px 14px 22px; }
+    html.device-phone .action-name { font-size: 24px; }
+    html.device-phone .action-time { font-size: 40px; }
+    html.device-phone .action-btn-in,
+    html.device-phone .action-btn-out { padding: 20px 8px; }
+    html.device-phone .action-btn-label { font-size: 16px; }
+    html.device-phone .action-btn-icon { font-size: 24px; }
+    html.device-phone #login-reader.reader-box,
+    html.device-phone #student-reader.reader-box,
+    html.device-phone #teacher-reader.reader-box,
+    html.device-phone #admin-reader.reader-box { height: 220px !important; }
+    html.device-phone .tab-btn { font-size: 10px; padding: 11px 4px; }
+}
+
+/* Phone: large (> 480px — Pro Max etc.) */
+@media (min-width: 480px) {
+    html.device-phone #login-reader.reader-box,
+    html.device-phone #student-reader.reader-box,
+    html.device-phone #teacher-reader.reader-box,
+    html.device-phone #admin-reader.reader-box { height: 320px !important; }
+    html.device-phone .action-time { font-size: 60px; }
+    html.device-phone .action-btn-in,
+    html.device-phone .action-btn-out { padding: 36px 14px; }
+    html.device-phone .action-btn-icon { font-size: 38px; }
+    html.device-phone .action-btn-label { font-size: 22px; }
+}
+
+/* ══════════════════════════════════════════════
+   PC LAYOUT  (device-pc class on <html>)
+   Centered phone frame, side panels, desktop UI ratios
+══════════════════════════════════════════════ */
+html.device-pc body {
+    background: #0d0d0d;
+    display: grid;
+    grid-template-columns: 1fr 480px 1fr;
+    grid-template-rows: 1fr auto;
+    align-items: center;
+    min-height: 100vh;
+    padding: 0;
+    gap: 0;
+}
+
+/* Decorative ambient glow behind left panel */
+html.device-pc body::after {
+    content: '';
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: calc(50vw - 240px);
+    height: 100vh;
+    background: linear-gradient(135deg, rgba(200, 16, 46, 0.10) 0%, transparent 70%);
+    border-right: 1px solid rgba(200, 16, 46, 0.07);
+    pointer-events: none;
+    z-index: 0;
+}
+
+/* PC: show side panels */
+html.device-pc .pc-left-panel {
+    display: flex !important;
+    grid-column: 1;
+    grid-row: 1;
+    flex-direction: column;
+    justify-content: center;
+    padding: 60px 36px 60px 64px;
+    position: relative;
+    z-index: 1;
+}
+
+html.device-pc .pc-right-panel {
+    display: flex !important;
+    grid-column: 3;
+    grid-row: 1;
+    flex-direction: column;
+    justify-content: center;
+    padding: 60px 64px 60px 36px;
+    position: relative;
+    z-index: 1;
+}
+
+/* PC: phone-frame container */
+html.device-pc .container {
+    grid-column: 2;
+    grid-row: 1;
+    width: 100%;
+    max-width: 480px;
+    height: 88vh;
+    max-height: 860px;
+    border-radius: 44px;
+    overflow: hidden;
+    box-shadow:
+        0 0 0 9px #1a1a1a,
+        0 0 0 11px #252525,
+        0 50px 120px rgba(0, 0, 0, 0.85),
+        0 0 80px rgba(200, 16, 46, 0.07);
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+/* PC: notch on phone frame */
+html.device-pc .container::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 110px;
+    height: 30px;
+    background: #1a1a1a;
+    border-radius: 0 0 20px 20px;
+    z-index: 100;
+}
+
+html.device-pc .screen.active {
+    min-height: 0;
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+html.device-pc .login-wrap,
+html.device-pc .action-wrap {
+    min-height: 100%;
+}
+
+html.device-pc .app-body {
+    overflow-y: auto;
+    flex: 1;
+}
+
+/* PC: credits row spans full grid width */
+html.device-pc .credits {
+    grid-column: 1 / 4;
+    grid-row: 2;
+    position: static;
+    transform: none;
+    display: flex;
+    justify-content: center;
+    padding: 16px 0 20px;
+    animation: none;
+}
+
+/* PC: camera larger for comfortable desktop scanning */
+html.device-pc #login-reader.reader-box,
+html.device-pc #student-reader.reader-box,
+html.device-pc #teacher-reader.reader-box,
+html.device-pc #admin-reader.reader-box {
+    height: 340px !important;
+    border-radius: 6px;
+}
+
+/* PC: scaled-up UI inside frame */
+html.device-pc .login-brand h1 {
+    font-size: 50px;
+    letter-spacing: 10px;
+}
+
+html.device-pc .action-name {
+    font-size: 34px;
+}
+
+html.device-pc .action-time {
+    font-size: 56px;
+}
+
+html.device-pc .action-btn-in,
+html.device-pc .action-btn-out {
+    padding: 28px 12px;
+    border-radius: 6px;
+}
+
+html.device-pc .action-btn-icon {
+    font-size: 30px;
+}
+
+html.device-pc .action-btn-label {
+    font-size: 20px;
+    letter-spacing: 4px;
+}
+
+html.device-pc .tab-btn {
+    font-size: 13px;
+    padding: 14px 10px;
+}
+
+html.device-pc .mode-btn {
+    font-size: 15px;
+    padding: 14px;
+}
+
+html.device-pc .btn-primary {
+    font-size: 19px;
+    padding: 18px;
+}
+
+html.device-pc .status-box strong {
+    font-size: 16px;
+}
+
+html.device-pc .status-box p {
+    font-size: 12px;
+}
+
+/* PC wide (≥1400px) — bigger frame + more padding */
+@media (min-width: 1400px) {
+    html.device-pc body {
+        grid-template-columns: 1fr 520px 1fr;
+    }
+
+    html.device-pc .container {
+        max-width: 520px;
+        height: 86vh;
+        max-height: 900px;
+    }
+
+    html.device-pc body::after {
+        width: calc(50vw - 260px);
+    }
+
+    html.device-pc .pc-left-panel {
+        padding: 60px 40px 60px 100px;
+    }
+
+    html.device-pc .pc-right-panel {
+        padding: 60px 100px 60px 40px;
+    }
+
+    html.device-pc #login-reader.reader-box,
+    html.device-pc #student-reader.reader-box,
+    html.device-pc #teacher-reader.reader-box,
+    html.device-pc #admin-reader.reader-box {
+        height: 380px !important;
+    }
+}
+
+/* PC ultrawide (≥1800px) */
+@media (min-width: 1800px) {
+    html.device-pc .pc-left-panel {
+        padding: 60px 40px 60px 140px;
+    }
+
+    html.device-pc .pc-right-panel {
+        padding: 60px 140px 60px 40px;
+    }
+}
+
+/* ══════════════════════════════════════════════
+   CREDITS — adjust for phone
+══════════════════════════════════════════════ */
+html.device-phone .credits {
+    bottom: 10px;
+    left: 50%;
+    position: fixed;
+    transform: translateX(-50%);
+    animation: creditsFloat 4s ease-in-out infinite;
+}
+
+html.device-phone .credits-name {
+    font-size: 22px;
+    letter-spacing: 6px;
+}
+
+html.device-phone .credits-inner {
+    padding: 8px 16px;
+}
+
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+/* ══════════════════════════════════════════════
+   PC SIDE PANELS CONTENT STYLES
+══════════════════════════════════════════════ */
 .pc-panel-content {
     display: flex;
     flex-direction: column;
@@ -1842,88 +1948,6 @@ body {
     letter-spacing: 2px;
     text-transform: uppercase;
     margin-top: 2px;
-}
-
-/* ══════════════════════════════════════════════
-   PC — BIGGER CAMERA / PHONE FRAME
-══════════════════════════════════════════════ */
-@media (min-width: 600px) {
-    .container {
-        max-width: 520px !important;
-        height: 92vh !important;
-        max-height: 900px !important;
-    }
-
-    #login-reader.reader-box,
-    #student-reader.reader-box,
-    #teacher-reader.reader-box,
-    #admin-reader.reader-box {
-        height: 360px !important;
-    }
-
-    /* Bigger text inside the phone frame on PC */
-    .login-brand h1 {
-        font-size: 52px !important;
-    }
-
-    .action-name {
-        font-size: 36px !important;
-    }
-
-    .action-time {
-        font-size: 58px !important;
-    }
-
-    .action-btn-in,
-    .action-btn-out {
-        padding: 32px 14px !important;
-    }
-
-    .action-btn-label {
-        font-size: 22px !important;
-    }
-
-    .action-btn-icon {
-        font-size: 34px !important;
-    }
-
-    .tab-btn {
-        font-size: 13px !important;
-        padding: 15px 10px !important;
-    }
-
-    .mode-btn {
-        font-size: 16px !important;
-        padding: 15px !important;
-    }
-
-    .btn-primary {
-        font-size: 20px !important;
-        padding: 20px !important;
-    }
-
-    .status-box strong {
-        font-size: 17px !important;
-    }
-
-    .status-box p {
-        font-size: 13px !important;
-    }
-}
-
-@media (min-width: 1200px) {
-    .container {
-        max-width: 560px !important;
-        height: 90vh !important;
-        max-height: 920px !important;
-    }
-
-    #login-reader.reader-box,
-    #student-reader.reader-box,
-    #teacher-reader.reader-box,
-    #admin-reader.reader-box {
-        height: 400px !important;
-    }
 }
 
 /* ── HALF DAY + NO TIME OUT status badges ────── */
@@ -2103,26 +2127,318 @@ body {
     text-transform: uppercase;
 }
 
-/* Hide credits inside the app container on mobile so it doesn't overlap */
-@media (max-width: 599px) {
-    .credits {
-        bottom: 10px;
-    }
 
-    .credits-name {
-        font-size: 22px;
-        letter-spacing: 6px;
-    }
 
-    .credits-inner {
-        padding: 8px 16px;
-    }
+/* ══════════════════════════════════════════════
+   SUSPEND / RESUME — Teacher Tab
+══════════════════════════════════════════════ */
+
+/* Red glow on suspend tab button when active suspension */
+#teacherSuspendTabBtn.suspended-active {
+    color: var(--red) !important;
+    border-bottom-color: var(--red) !important;
+    background: rgba(200, 16, 46, 0.12) !important;
+    animation: suspendPulse 2s infinite;
 }
 
-/* On PC, show it outside the phone frame */
-@media (min-width: 600px) {
-    .credits {
-        bottom: 24px;
-        left: 50%;
-    }
+@keyframes suspendPulse {
+    0%, 100% { background: rgba(200, 16, 46, 0.12) !important; }
+    50% { background: rgba(200, 16, 46, 0.22) !important; }
+}
+
+/* Top banner shown when suspended */
+.suspend-banner {
+    background: var(--red);
+    color: var(--white);
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 13px;
+    letter-spacing: 3px;
+    padding: 10px 16px;
+    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.suspend-banner.hidden { display: none; }
+
+/* Main suspend card */
+.suspend-card {
+    background: var(--white);
+    border-left: 4px solid var(--red);
+    padding: 20px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.suspend-card-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 17px;
+    letter-spacing: 3px;
+    color: var(--dark);
+}
+
+.suspend-card-desc {
+    font-size: 12px;
+    color: rgba(0,0,0,0.5);
+    line-height: 1.6;
+}
+
+/* Reason chips */
+.suspend-field-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    color: rgba(0,0,0,0.4);
+    text-transform: uppercase;
+    margin-bottom: 2px;
+    display: block;
+}
+
+.suspend-form {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.suspend-reason-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.reason-chip {
+    padding: 6px 12px;
+    border: 1.5px solid rgba(200,16,46,0.3);
+    background: transparent;
+    color: rgba(0,0,0,0.55);
+    font-family: 'Noto Sans JP', sans-serif;
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    border-radius: 20px;
+    transition: all 0.18s;
+    letter-spacing: 0.5px;
+}
+
+.reason-chip:hover {
+    border-color: var(--red);
+    color: var(--red);
+    background: rgba(200,16,46,0.05);
+}
+
+.reason-chip.selected {
+    background: var(--red);
+    color: var(--white);
+    border-color: var(--red);
+}
+
+/* Reason textarea */
+.suspend-textarea {
+    width: 100%;
+    padding: 11px 13px;
+    border: 2px solid var(--light);
+    background: var(--off-white);
+    font-family: 'Noto Sans JP', sans-serif;
+    font-size: 12px;
+    color: var(--dark);
+    resize: vertical;
+    outline: none;
+    border-radius: 0;
+    transition: border-color 0.2s;
+    line-height: 1.5;
+}
+
+.suspend-textarea:focus {
+    border-color: var(--red);
+}
+
+/* Suspend button */
+.btn-suspend {
+    width: 100%;
+    padding: 16px;
+    background: var(--red);
+    color: var(--white);
+    border: none;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 17px;
+    letter-spacing: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    transition: background 0.2s;
+    flex-shrink: 0;
+}
+
+.btn-suspend:hover { background: var(--deep-red); }
+.btn-suspend:disabled { background: #ccc; cursor: not-allowed; }
+
+/* Resume card */
+.resume-card {
+    background: var(--white);
+    border-left: 4px solid var(--green);
+    padding: 20px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.resume-card.hidden { display: none; }
+
+.resume-card-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 17px;
+    letter-spacing: 3px;
+    color: var(--green);
+}
+
+.resume-active-reason {
+    background: var(--error-bg);
+    border-left: 3px solid var(--red);
+    padding: 10px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--red);
+    letter-spacing: 0.5px;
+}
+
+.btn-resume {
+    width: 100%;
+    padding: 16px;
+    background: var(--green);
+    color: var(--white);
+    border: none;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 17px;
+    letter-spacing: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    transition: background 0.2s;
+    flex-shrink: 0;
+}
+
+.btn-resume:hover { background: #155228; }
+.btn-resume:disabled { background: #ccc; cursor: not-allowed; }
+
+/* ══════════════════════════════════════════════
+   SUSPENSION NOTICE SCREEN — shown to students
+══════════════════════════════════════════════ */
+.suspended-wrap {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    background: var(--dark);
+    background-image:
+        repeating-linear-gradient(0deg, transparent, transparent 50px, rgba(255,255,255,0.02) 50px, rgba(255,255,255,0.02) 51px),
+        repeating-linear-gradient(90deg, transparent, transparent 50px, rgba(255,255,255,0.02) 50px, rgba(255,255,255,0.02) 51px);
+}
+
+.suspended-hero {
+    padding: 44px 28px 24px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.suspended-hero .kanji-bg {
+    position: absolute;
+    right: -10px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-family: 'Noto Serif JP', serif;
+    font-size: 150px;
+    font-weight: 900;
+    color: rgba(255,255,255,0.04);
+    pointer-events: none;
+    line-height: 1;
+}
+
+.suspended-icon {
+    font-size: 52px;
+    margin-bottom: 12px;
+    position: relative;
+    z-index: 1;
+}
+
+.suspended-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 40px;
+    color: var(--white);
+    letter-spacing: 6px;
+    line-height: 1.1;
+    position: relative;
+    z-index: 1;
+}
+
+.suspended-school {
+    margin-top: 10px;
+    font-size: 11px;
+    color: rgba(255,255,255,0.4);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    position: relative;
+    z-index: 1;
+}
+
+.suspended-card {
+    background: var(--off-white);
+    flex: 1;
+    border-radius: 24px 24px 0 0;
+    padding: 28px 22px 32px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    position: relative;
+}
+
+.suspended-card::before {
+    content: '';
+    width: 40px;
+    height: 4px;
+    background: rgba(0,0,0,0.12);
+    border-radius: 2px;
+    position: absolute;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.suspended-reason-label {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 11px;
+    letter-spacing: 4px;
+    color: var(--red);
+}
+
+.suspended-reason-text {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 26px;
+    letter-spacing: 2px;
+    color: var(--dark);
+    line-height: 1.2;
+}
+
+.suspended-by {
+    font-size: 11px;
+    color: rgba(0,0,0,0.4);
+    letter-spacing: 1px;
+    margin-top: -6px;
+}
+
+.suspended-info {
+    background: var(--white);
+    border-left: 4px solid var(--red);
+    padding: 14px 16px;
+    font-size: 12px;
+    color: rgba(0,0,0,0.6);
+    line-height: 1.65;
 }

@@ -20,7 +20,7 @@
      SCREEN 1: LOGIN (QR Scan to identify user)
 ════════════════════════════════════════════ -->
     <!-- PC LEFT PANEL -->
-    <div class="pc-left-panel" style="display:none;">
+    <div class="pc-left-panel">
         <div class="pc-panel-content">
             <div class="pc-logo">PRESENCE</div>
             <div class="pc-tagline">Smart Attendance<br>Management System</div>
@@ -79,8 +79,27 @@
         </div>
 
         <!-- ═══════════════════════════════════════════
-     SCREEN 2: STUDENT SCAN (teacher/admin scans students)
+     SCREEN: SUSPENSION NOTICE (shown to students when attendance is suspended)
 ════════════════════════════════════════════ -->
+        <div id="screen-suspended" class="screen">
+            <div class="suspended-wrap">
+                <div class="suspended-hero">
+                    <div class="kanji-bg">休</div>
+                    <div class="suspended-icon">🚫</div>
+                    <div class="suspended-title">ATTENDANCE<br>SUSPENDED</div>
+                    <p class="suspended-school">Aringay National High School</p>
+                </div>
+                <div class="suspended-card">
+                    <div class="suspended-reason-label">REASON</div>
+                    <div class="suspended-reason-text" id="suspendedReasonDisplay">—</div>
+                    <div class="suspended-by" id="suspendedByDisplay"></div>
+                    <div class="suspended-info">
+                        Attendance recording has been temporarily disabled by your teacher. Please check back later or approach your teacher for assistance.
+                    </div>
+                    <button class="action-back-btn" style="margin-top:8px;" onclick="goBackToScan()">← BACK TO LOGIN</button>
+                </div>
+            </div>
+        </div>
         <div id="screen-student" class="screen">
             <div class="app-header">
                 <div class="app-header-inner">
@@ -169,6 +188,7 @@
             <nav class="tab-nav" id="teacherNav">
                 <button class="tab-btn active" data-tab="teacherTimeTab">🕐 MY TIME</button>
                 <button class="tab-btn" data-tab="teacherLogsTab">📋 LOGS</button>
+                <button class="tab-btn" data-tab="teacherSuspendTab" id="teacherSuspendTabBtn">🚫 SUSPEND</button>
             </nav>
             <div class="app-body">
                 <!-- My Time Tab -->
@@ -197,6 +217,44 @@
                         </select>
                     </div>
                     <div id="teacherLogsDisplay" class="logs-list"></div>
+                </div>
+
+                <!-- Suspend Tab -->
+                <div id="teacherSuspendTab" class="tab-pane">
+                    <div id="suspendStatusBanner" class="suspend-banner hidden"></div>
+
+                    <div class="suspend-card">
+                        <div class="suspend-card-title">🚫 SUSPEND ATTENDANCE</div>
+                        <p class="suspend-card-desc">Temporarily disables attendance scanning for all students today. Students who scan their QR will see a suspension notice instead of the time-in/out screen.</p>
+
+                        <div class="suspend-form">
+                            <label class="suspend-field-label">REASON FOR SUSPENSION</label>
+                            <div class="suspend-reason-chips" id="suspendReasonChips">
+                                <button class="reason-chip" onclick="selectReasonChip(this, 'No Classes Today')">No Classes Today</button>
+                                <button class="reason-chip" onclick="selectReasonChip(this, 'School Holiday')">School Holiday</button>
+                                <button class="reason-chip" onclick="selectReasonChip(this, 'Typhoon Suspension')">Typhoon Suspension</button>
+                                <button class="reason-chip" onclick="selectReasonChip(this, 'School Event')">School Event</button>
+                                <button class="reason-chip" onclick="selectReasonChip(this, 'System Maintenance')">System Maintenance</button>
+                                <button class="reason-chip" onclick="selectReasonChip(this, 'Other')">Other</button>
+                            </div>
+                            <textarea id="suspendReasonText" class="suspend-textarea" placeholder="Type a custom reason or add details…" rows="3"></textarea>
+                        </div>
+
+                        <button class="btn-suspend" id="btnSuspendAttendance" onclick="suspendAttendance()">
+                            <span>🚫</span> SUSPEND ATTENDANCE
+                        </button>
+                    </div>
+
+                    <div class="resume-card hidden" id="resumeCard">
+                        <div class="resume-card-title">✅ RE-ENABLE ATTENDANCE</div>
+                        <div class="resume-active-reason" id="resumeActiveReason"></div>
+                        <p class="suspend-card-desc">Attendance is currently suspended. Press below to re-enable scanning for students.</p>
+                        <button class="btn-resume" id="btnResumeAttendance" onclick="resumeAttendance()">
+                            <span>✅</span> RE-ENABLE ATTENDANCE
+                        </button>
+                    </div>
+
+                    <div id="suspendMsg" class="status-box info" style="display:none;"></div>
                 </div>
             </div>
         </div>
@@ -318,7 +376,7 @@
     </div> <!-- /.container -->
 
     <!-- PC RIGHT PANEL -->
-    <div class="pc-right-panel" style="display:none;">
+    <div class="pc-right-panel">
         <div class="pc-panel-content pc-panel-right">
             <div class="pc-stats-title">TODAY'S OVERVIEW</div>
             <div class="pc-stat-block" id="pcStatPresent">
@@ -350,6 +408,9 @@
             <div class="credits-sub">PRESENCE &nbsp;•&nbsp; Aringay NHS &nbsp;•&nbsp; 2025</div>
         </div>
     </div>
+
+    <!-- Device mode badge -->
+    <div id="device-badge" class="device-badge"></div>
 
     <!-- Toast notification -->
     <div id="toast" class="toast"></div>

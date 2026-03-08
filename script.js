@@ -3,6 +3,53 @@
 //  Replace YOUR_PROJECT_URL and YOUR_ANON_KEY
 //  with your actual Supabase credentials.
 // ═══════════════════════════════════════════════
+
+// ── DEVICE DETECTION ─────────────────────────
+// Detects phone vs PC using touch support, user agent, and screen width.
+// Applies a class to <html> that CSS and JS can both use.
+(function detectDevice() {
+    const isTouchDevice = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+    const isNarrowScreen = window.innerWidth < 768;
+    const mobileUA = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile/i.test(navigator.userAgent);
+
+    const isPhone = isTouchDevice && (isNarrowScreen || mobileUA);
+
+    const html = document.documentElement;
+    if (isPhone) {
+        html.classList.add('device-phone');
+        html.classList.remove('device-pc');
+    } else {
+        html.classList.add('device-pc');
+        html.classList.remove('device-phone');
+    }
+
+    // Show a device indicator badge for 2.5s
+    window.addEventListener('DOMContentLoaded', () => {
+        const badge = document.getElementById('device-badge');
+        if (badge) {
+            badge.textContent = isPhone ? '📱 PHONE MODE' : '🖥️ PC MODE';
+            badge.classList.add('visible');
+            setTimeout(() => badge.classList.remove('visible'), 2500);
+        }
+    });
+
+    // Re-check on resize (e.g. rotation)
+    let resizeTimer;
+    window.addEventListener('resize', () => {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(() => {
+            const nowNarrow = window.innerWidth < 768;
+            const nowPhone = isTouchDevice && (nowNarrow || mobileUA);
+            if (nowPhone) {
+                html.classList.add('device-phone');
+                html.classList.remove('device-pc');
+            } else {
+                html.classList.add('device-pc');
+                html.classList.remove('device-phone');
+            }
+        }, 200);
+    });
+})();
 const SUPABASE_URL = 'https://yapnbwxerwppsepcdcxi.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlhcG5id3hlcndwcHNlcGNkY3hpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI1MjY2NDIsImV4cCI6MjA4ODEwMjY0Mn0.ROjaZEjyQ22-GHEussOo1Sr7VCAhoWnjO-42NCWtrxk';
 const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
@@ -33,8 +80,8 @@ document.addEventListener('DOMContentLoaded', () => {
         startLoginScanner();
     });
 
-    // Teacher tabs
-    wireTabNav('teacherNav', startTeacherScannerIfNeeded);
+    // ── Teacher tabs
+    wireTabNav('teacherNav', onTeacherTabChange);
 
     // Admin tabs
     wireTabNav('adminNav', onAdminTabChange);
@@ -187,12 +234,23 @@ async function handleLogin(qrData) {
     currentUser = { type, id, name };
 
     if (currentUser.type === 'student') {
+        // Check if attendance is suspended before showing the action page
+        const suspState = await getSuspensionState();
+        if (suspState.suspended) {
+            document.getElementById('suspendedReasonDisplay').textContent = suspState.reason || 'No reason given';
+            document.getElementById('suspendedByDisplay').textContent = suspState.by ? `Suspended by: ${suspState.by}` : '';
+            loginScanner = await stopScanner(loginScanner);
+            showScreen('suspended');
+            return;
+        }
         // Students go directly to the Time In / Time Out action page
         await showStudentActionPage(currentUser.id, currentUser.name);
     } else if (currentUser.type === 'teacher') {
         document.getElementById('teacherBadge').innerHTML = `${currentUser.name}<br><span style="font-size:9px;opacity:0.7">TEACHER</span>`;
         showScreen('teacher');
         loadTeacherOwnTime();
+        // Refresh suspend tab badge if currently suspended
+        getSuspensionState().then(s => { if (s.suspended) document.getElementById('teacherSuspendTabBtn')?.classList.add('suspended-active'); });
     } else if (currentUser.type === 'admin') {
         document.getElementById('adminBadge').innerHTML = `${currentUser.name}<br><span style="font-size:9px;opacity:0.7">ADMIN</span>`;
         showScreen('admin');
@@ -364,12 +422,153 @@ function goBackToScan() {
 }
 
 // ══════════════════════════════════════════════
-//  TEACHER SCREEN
+//  TEACHER TABS
 // ══════════════════════════════════════════════
-async function startTeacherScannerIfNeeded(tabId) {
+async function onTeacherTabChange(tabId) {
     if (tabId === 'teacherLogsTab') loadLogs('teacher');
     if (tabId === 'teacherTimeTab') loadTeacherOwnTime();
+    if (tabId === 'teacherSuspendTab') loadSuspendTab();
 }
+
+async function startTeacherScannerIfNeeded(tabId) {
+    onTeacherTabChange(tabId);
+}
+
+// ══════════════════════════════════════════════
+//  ATTENDANCE SUSPENSION SYSTEM
+//  Stores suspension state in Supabase table
+//  "attendance_suspension": { id, date, suspended, reason, suspended_by, created_at }
+//  Falls back to localStorage if DB unavailable.
+// ══════════════════════════════════════════════
+
+// In-memory cache for current session
+let _suspendCache = null; // { suspended: bool, reason: string, by: string } | null
+
+async function getSuspensionState() {
+    const today = todayDate();
+    try {
+        const { data, error } = await db.from('attendance_suspension')
+            .select('*').eq('date', today).maybeSingle();
+        if (error) throw error;
+        _suspendCache = data ? { suspended: data.suspended, reason: data.reason, by: data.suspended_by } : { suspended: false, reason: '', by: '' };
+    } catch (_) {
+        // Fallback: localStorage
+        try {
+            const raw = localStorage.getItem('attendance_suspension_' + today);
+            _suspendCache = raw ? JSON.parse(raw) : { suspended: false, reason: '', by: '' };
+        } catch (__) { _suspendCache = { suspended: false, reason: '', by: '' }; }
+    }
+    return _suspendCache;
+}
+
+async function setSuspensionState(suspended, reason, by) {
+    const today = todayDate();
+    const payload = { date: today, suspended, reason, suspended_by: by };
+    try {
+        const { data: existing } = await db.from('attendance_suspension').select('id').eq('date', today).maybeSingle();
+        if (existing) {
+            await db.from('attendance_suspension').update({ suspended, reason, suspended_by: by }).eq('date', today);
+        } else {
+            await db.from('attendance_suspension').insert(payload);
+        }
+    } catch (_) {
+        // Fallback: localStorage
+        try { localStorage.setItem('attendance_suspension_' + today, JSON.stringify({ suspended, reason, by })); } catch (__) {}
+    }
+    _suspendCache = { suspended, reason, by };
+}
+
+// ── Selected reason chip text ─────────────────
+let _selectedChipReason = '';
+
+function selectReasonChip(el, reason) {
+    document.querySelectorAll('.reason-chip').forEach(c => c.classList.remove('selected'));
+    el.classList.add('selected');
+    _selectedChipReason = reason;
+    // If not "Other", populate textarea too
+    if (reason !== 'Other') {
+        const ta = document.getElementById('suspendReasonText');
+        if (ta && !ta.value) ta.value = reason;
+    }
+}
+
+// ── Load suspend tab UI ───────────────────────
+async function loadSuspendTab() {
+    const state = await getSuspensionState();
+    renderSuspendUI(state);
+}
+
+function renderSuspendUI(state) {
+    const banner = document.getElementById('suspendStatusBanner');
+    const suspendCard = document.querySelector('.suspend-card');
+    const resumeCard = document.getElementById('resumeCard');
+    const tabBtn = document.getElementById('teacherSuspendTabBtn');
+
+    if (state.suspended) {
+        // Show active suspension UI
+        banner.textContent = '⚠️ ATTENDANCE IS CURRENTLY SUSPENDED';
+        banner.classList.remove('hidden');
+        suspendCard.style.display = 'none';
+        resumeCard.classList.remove('hidden');
+        document.getElementById('resumeActiveReason').textContent = state.reason || 'No reason given';
+        document.getElementById('resumeActiveReason').innerHTML =
+            `<strong style="font-size:10px;letter-spacing:2px;opacity:0.6">ACTIVE REASON:</strong><br>${state.reason || 'No reason given'}` +
+            (state.by ? `<span style="display:block;font-size:10px;margin-top:4px;opacity:0.55">— Suspended by ${state.by}</span>` : '');
+        tabBtn?.classList.add('suspended-active');
+    } else {
+        banner.classList.add('hidden');
+        suspendCard.style.display = 'flex';
+        resumeCard.classList.add('hidden');
+        tabBtn?.classList.remove('suspended-active');
+    }
+    document.getElementById('suspendMsg').style.display = 'none';
+}
+
+// ── Suspend attendance ────────────────────────
+async function suspendAttendance() {
+    const chipReason = _selectedChipReason;
+    const textReason = document.getElementById('suspendReasonText')?.value?.trim();
+    const reason = textReason || chipReason || 'No reason provided';
+
+    if (!chipReason && !textReason) {
+        setStatus('suspendMsg', 'warning', 'REASON REQUIRED', 'Please select or type a reason before suspending.');
+        document.getElementById('suspendMsg').style.display = 'flex';
+        return;
+    }
+
+    const btn = document.getElementById('btnSuspendAttendance');
+    btn.disabled = true;
+    btn.textContent = '⏳ SUSPENDING...';
+
+    await setSuspensionState(true, reason, currentUser?.name || 'Teacher');
+    showToast('⚠️ Attendance suspended');
+    renderSuspendUI({ suspended: true, reason, by: currentUser?.name || 'Teacher' });
+
+    btn.disabled = false;
+    btn.innerHTML = '<span>🚫</span> SUSPEND ATTENDANCE';
+}
+
+// ── Resume attendance ─────────────────────────
+async function resumeAttendance() {
+    const btn = document.getElementById('btnResumeAttendance');
+    btn.disabled = true;
+    btn.textContent = '⏳ RE-ENABLING...';
+
+    await setSuspensionState(false, '', '');
+    showToast('✅ Attendance re-enabled');
+    renderSuspendUI({ suspended: false, reason: '', by: '' });
+
+    // Clear chip + textarea for next use
+    document.querySelectorAll('.reason-chip').forEach(c => c.classList.remove('selected'));
+    _selectedChipReason = '';
+    const ta = document.getElementById('suspendReasonText');
+    if (ta) ta.value = '';
+
+    btn.disabled = false;
+    btn.innerHTML = '<span>✅</span> RE-ENABLE ATTENDANCE';
+}
+
+
 
 // Teacher logs
 async function loadLogs(role) {
@@ -1068,7 +1267,7 @@ async function loadUploadHistory() {
 //  PC SIDE PANELS — clock + live stats
 // ══════════════════════════════════════════════
 function initPCPanels() {
-    if (window.innerWidth < 600) return;
+    if (document.documentElement.classList.contains('device-phone')) return;
 
     // Live clock on right panel
     function updatePCClock() {
@@ -1088,7 +1287,7 @@ function initPCPanels() {
 }
 
 async function loadPCStats() {
-    if (window.innerWidth < 600) return;
+    if (document.documentElement.classList.contains('device-phone')) return;
     const today = todayDate();
     const [stuRes, lateRes, tchRes] = await Promise.all([
         db.from('attendance_logs').select('id', { count: 'exact', head: true }).eq('date', today).eq('person_type', 'student'),
