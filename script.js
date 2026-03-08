@@ -238,8 +238,17 @@ async function handleLogin(qrData) {
         const suspState = await getSuspensionState();
         if (suspState.suspended) {
             document.getElementById('suspendedReasonDisplay').textContent = suspState.reason || 'No reason given';
-            document.getElementById('suspendedByDisplay').textContent = suspState.by ? `Suspended by: ${suspState.by}` : '';
+            document.getElementById('suspendedByDisplay').textContent = suspState.by ? `— Suspended by: ${suspState.by}` : '';
             loginScanner = await stopScanner(loginScanner);
+            // Start clock on suspended screen
+            const clkEl = document.getElementById('suspendedClock');
+            if (clkEl) {
+                const tick = () => clkEl.textContent = new Date().toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                tick();
+                const suspClkId = setInterval(tick, 1000);
+                // Clear it when leaving
+                clkEl.dataset.intervalId = suspClkId;
+            }
             showScreen('suspended');
             return;
         }
@@ -412,6 +421,9 @@ async function studentAction(mode) {
 // ── Return to login scan screen ─────────────────
 function goBackToScan() {
     if (clockInterval) { clearInterval(clockInterval); clockInterval = null; }
+    // Clear suspended screen clock if any
+    const clkEl = document.getElementById('suspendedClock');
+    if (clkEl?.dataset.intervalId) { clearInterval(Number(clkEl.dataset.intervalId)); clkEl.dataset.intervalId = ''; }
     currentUser = null; scanLock = false;
     const btn = document.getElementById('loginScanBtn');
     btn.style.display = 'flex'; btn.disabled = false;
@@ -444,17 +456,24 @@ async function startTeacherScannerIfNeeded(tabId) {
 // In-memory cache for current session
 let _suspendCache = null; // { suspended: bool, reason: string, by: string } | null
 
-async function getSuspensionState() {
+async function getSuspensionState(forceRefresh = false) {
     const today = todayDate();
+    // Always fetch fresh from DB — never rely on stale in-memory cache
+    // (teacher may have suspended AFTER the student's session started)
     try {
         const { data, error } = await db.from('attendance_suspension')
             .select('*').eq('date', today).maybeSingle();
         if (error) throw error;
-        _suspendCache = data ? { suspended: data.suspended, reason: data.reason, by: data.suspended_by } : { suspended: false, reason: '', by: '' };
+        _suspendCache = data
+            ? { suspended: !!data.suspended, reason: data.reason || '', by: data.suspended_by || '' }
+            : { suspended: false, reason: '', by: '' };
+        // Keep localStorage in sync as fallback
+        try { localStorage.setItem('presence_suspend_' + today, JSON.stringify(_suspendCache)); } catch (_) {}
     } catch (_) {
         // Fallback: localStorage
         try {
-            const raw = localStorage.getItem('attendance_suspension_' + today);
+            const raw = localStorage.getItem('presence_suspend_' + today)
+                     || localStorage.getItem('attendance_suspension_' + today); // legacy key
             _suspendCache = raw ? JSON.parse(raw) : { suspended: false, reason: '', by: '' };
         } catch (__) { _suspendCache = { suspended: false, reason: '', by: '' }; }
     }
@@ -464,6 +483,8 @@ async function getSuspensionState() {
 async function setSuspensionState(suspended, reason, by) {
     const today = todayDate();
     const payload = { date: today, suspended, reason, suspended_by: by };
+    // Always write localStorage immediately for same-device fallback
+    try { localStorage.setItem('presence_suspend_' + today, JSON.stringify({ suspended, reason, by })); } catch (_) {}
     try {
         const { data: existing } = await db.from('attendance_suspension').select('id').eq('date', today).maybeSingle();
         if (existing) {
@@ -472,8 +493,8 @@ async function setSuspensionState(suspended, reason, by) {
             await db.from('attendance_suspension').insert(payload);
         }
     } catch (_) {
-        // Fallback: localStorage
-        try { localStorage.setItem('attendance_suspension_' + today, JSON.stringify({ suspended, reason, by })); } catch (__) {}
+        // DB failed — localStorage fallback already written above
+        console.warn('[PRESENCE] Could not write suspension to DB — using localStorage only');
     }
     _suspendCache = { suspended, reason, by };
 }
@@ -1312,26 +1333,68 @@ document.addEventListener('DOMContentLoaded', () => {
 //  YYYY-MM-DD.xlsx to the "logs" Supabase bucket,
 //  then resets the UI back to the login screen.
 // ══════════════════════════════════════════════
+// ══════════════════════════════════════════════
+//  MIDNIGHT AUTO-SAVE & RESET
+//
+//  WHY POLLING INSTEAD OF setTimeout:
+//  Browsers throttle or kill large setTimeout timers for background tabs.
+//  A setInterval that checks every ~30 seconds is far more reliable.
+//
+//  FLOW AT 00:00:
+//    1. Capture yesterday's date BEFORE the date string flips
+//    2. Fetch all attendance_logs for that date
+//    3. Build XLSX and upload to Supabase Storage "logs" bucket
+//    4. Log the upload in upload_logs table
+//    5. DELETE all rows for that date from attendance_logs
+//    6. Reset the UI back to the login screen
+// ══════════════════════════════════════════════
+
+let _midnightFired = false; // prevent double-fire within the same minute
+
 function scheduleMidnightReset() {
-    const now = new Date();
-    const midnight = new Date(now);
-    midnight.setHours(24, 0, 0, 0); // next true midnight (00:00 AM next day)
-    const msUntilMidnight = midnight - now;
+    // Poll every 30 seconds — lightweight, survives tab throttling
+    setInterval(async () => {
+        const now = new Date();
+        const h = now.getHours();
+        const m = now.getMinutes();
 
-    setTimeout(async () => {
-        await midnightSaveAndReset();
-        // Re-schedule for the next night
-        scheduleMidnightReset();
-    }, msUntilMidnight);
+        // Fire at 00:00 (midnight). Use a 2-minute window (00:00–00:01) so
+        // even if the tab was throttled we catch it on the next wake.
+        if (h === 0 && m <= 1) {
+            if (!_midnightFired) {
+                _midnightFired = true;
+                console.log('[PRESENCE] Midnight window detected — running save & reset');
+                await midnightSaveAndReset();
+            }
+        } else {
+            // Reset flag once we're past the 00:01 window
+            if (h !== 0 || m > 1) _midnightFired = false;
+        }
+    }, 30_000); // check every 30 seconds
 
-    console.log(`[PRESENCE] Midnight reset scheduled in ${Math.round(msUntilMidnight / 60000)} min`);
+    // Also run one immediate check in case the page loaded during the window
+    (async () => {
+        const now = new Date();
+        if (now.getHours() === 0 && now.getMinutes() <= 1 && !_midnightFired) {
+            _midnightFired = true;
+            await midnightSaveAndReset();
+        }
+    })();
+
+    console.log('[PRESENCE] Midnight reset polling started (checks every 30s)');
 }
 
 async function midnightSaveAndReset() {
-    const dateStr = todayDate(); // still "today" at the moment this fires (just before midnight ticks)
+    // Capture YESTERDAY's date — this function runs at/just after midnight,
+    // so "yesterday" is the day whose records we need to save.
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const dateStr = yesterday.toISOString().split('T')[0];
+
+    console.log(`[PRESENCE] midnightSaveAndReset — saving records for ${dateStr}`);
 
     try {
-        // ── 1. Fetch all of today's records ──
+        // ── 1. Fetch all records for yesterday ──
         const { data, error } = await db.from('attendance_logs')
             .select('*')
             .eq('date', dateStr)
@@ -1354,39 +1417,55 @@ async function midnightSaveAndReset() {
                 .from('logs')
                 .upload(fileName, blob, {
                     contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                    upsert: true   // overwrite if same date runs twice
+                    upsert: true // overwrite if same date runs twice
                 });
 
-            if (uploadErr) throw uploadErr;
+            if (uploadErr) {
+                // Upload failed — don't delete records, log the error and abort
+                console.error('[PRESENCE] Storage upload failed:', uploadErr.message);
+                throw uploadErr;
+            }
 
-            // ── 4. Log the upload ──
+            // ── 4. Get public URL and log the upload ──
+            const { data: urlData } = db.storage.from('logs').getPublicUrl(fileName);
+            const publicUrl = urlData?.publicUrl || '';
+
             await db.from('upload_logs').insert({
                 file_name: fileName,
                 uploaded_by: 'AUTO (midnight reset)',
                 date_from: dateStr,
                 date_to: dateStr,
                 record_count: data.length,
-                file_url: db.storage.from('logs').getPublicUrl(fileName)?.data?.publicUrl || ''
+                file_url: publicUrl
             });
 
             console.log(`[PRESENCE] Midnight save OK → logs/${fileName} (${data.length} records)`);
-            showToast(`✓ Daily log saved: ${fileName}`);
 
-            // ── 5. Clear today's records so everyone can time in fresh ──
+            // ── 5. Delete yesterday's records now that the file is safely uploaded ──
             const { error: deleteErr } = await db.from('attendance_logs')
                 .delete()
                 .eq('date', dateStr);
-            if (deleteErr) throw deleteErr;
-            console.log(`[PRESENCE] Cleared ${data.length} records for ${dateStr} — table reset.`);
+
+            if (deleteErr) {
+                console.error('[PRESENCE] Delete failed after upload:', deleteErr.message);
+                // File is saved — deletion failure is non-fatal, just log it
+            } else {
+                console.log(`[PRESENCE] Cleared ${data.length} records for ${dateStr}`);
+            }
+
+            showToast(`✓ Daily log saved & table reset: ${fileName}`);
 
         } else {
-            console.log(`[PRESENCE] Midnight: no records for ${dateStr}, skipping save.`);
+            console.log(`[PRESENCE] Midnight: no records for ${dateStr} — nothing to save`);
         }
+
     } catch (err) {
         console.error('[PRESENCE] Midnight save error:', err);
+        // Do NOT reset the table if save failed — records are safer kept in DB
+        // UI reset still proceeds below
     }
 
-    // ── 5. Reset app to login screen ──
+    // ── 6. Reset app UI back to login screen ──
     try {
         activeScanner = await stopScanner(activeScanner);
         loginScanner = await stopScanner(loginScanner);
@@ -1399,7 +1478,6 @@ async function midnightSaveAndReset() {
 
     if (clockInterval) { clearInterval(clockInterval); clockInterval = null; }
 
-    // Reset login button
     const btn = document.getElementById('loginScanBtn');
     if (btn) {
         btn.style.display = 'flex';
@@ -1414,3 +1492,4 @@ async function midnightSaveAndReset() {
 
     console.log('[PRESENCE] Midnight reset complete — back to login screen.');
 }
+

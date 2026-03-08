@@ -2335,68 +2335,94 @@ html.device-phone .credits-inner {
     display: flex;
     flex-direction: column;
     min-height: 100vh;
-    background: var(--dark);
+    background: #1a0005;
     background-image:
-        repeating-linear-gradient(0deg, transparent, transparent 50px, rgba(255,255,255,0.02) 50px, rgba(255,255,255,0.02) 51px),
-        repeating-linear-gradient(90deg, transparent, transparent 50px, rgba(255,255,255,0.02) 50px, rgba(255,255,255,0.02) 51px);
+        repeating-linear-gradient(0deg, transparent, transparent 40px, rgba(200,16,46,0.06) 40px, rgba(200,16,46,0.06) 41px),
+        repeating-linear-gradient(90deg, transparent, transparent 40px, rgba(200,16,46,0.06) 40px, rgba(200,16,46,0.06) 41px);
 }
 
 .suspended-hero {
-    padding: 44px 28px 24px;
+    padding: 44px 28px 26px;
     text-align: center;
     position: relative;
     overflow: hidden;
     flex-shrink: 0;
+    background: linear-gradient(180deg, rgba(200,16,46,0.18) 0%, transparent 100%);
 }
 
 .suspended-hero .kanji-bg {
     position: absolute;
-    right: -10px;
+    right: -15px;
     top: 50%;
     transform: translateY(-50%);
     font-family: 'Noto Serif JP', serif;
-    font-size: 150px;
+    font-size: 160px;
     font-weight: 900;
-    color: rgba(255,255,255,0.04);
+    color: rgba(200,16,46,0.10);
     pointer-events: none;
     line-height: 1;
+    letter-spacing: -4px;
 }
 
-.suspended-icon {
-    font-size: 52px;
-    margin-bottom: 12px;
+/* Flashing SCANNING DISABLED badge */
+.suspended-badge {
+    display: inline-block;
+    background: var(--red);
+    color: var(--white);
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 11px;
+    letter-spacing: 4px;
+    padding: 5px 14px;
+    border-radius: 20px;
+    margin-bottom: 16px;
     position: relative;
     z-index: 1;
+    animation: suspBadgePulse 1.4s ease-in-out infinite;
+}
+
+@keyframes suspBadgePulse {
+    0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(200,16,46,0.5); }
+    50% { opacity: 0.85; box-shadow: 0 0 0 8px rgba(200,16,46,0); }
+}
+
+.suspended-icon-big {
+    font-size: 64px;
+    margin-bottom: 10px;
+    position: relative;
+    z-index: 1;
+    line-height: 1;
+    filter: drop-shadow(0 0 20px rgba(200,16,46,0.5));
 }
 
 .suspended-title {
     font-family: 'Bebas Neue', sans-serif;
-    font-size: 40px;
+    font-size: 44px;
     color: var(--white);
-    letter-spacing: 6px;
-    line-height: 1.1;
+    letter-spacing: 4px;
+    line-height: 1.05;
     position: relative;
     z-index: 1;
 }
 
 .suspended-school {
     margin-top: 10px;
-    font-size: 11px;
-    color: rgba(255,255,255,0.4);
+    font-size: 10px;
+    color: rgba(255,255,255,0.35);
     letter-spacing: 3px;
     text-transform: uppercase;
     position: relative;
     z-index: 1;
 }
 
+/* Card */
 .suspended-card {
     background: var(--off-white);
     flex: 1;
     border-radius: 24px 24px 0 0;
-    padding: 28px 22px 32px;
+    padding: 30px 22px 34px;
     display: flex;
     flex-direction: column;
-    gap: 14px;
+    gap: 16px;
     position: relative;
 }
 
@@ -2412,6 +2438,16 @@ html.device-phone .credits-inner {
     transform: translateX(-50%);
 }
 
+/* Reason block */
+.suspended-reason-block {
+    background: var(--white);
+    border-left: 5px solid var(--red);
+    padding: 16px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
 .suspended-reason-label {
     font-family: 'Bebas Neue', sans-serif;
     font-size: 11px;
@@ -2421,24 +2457,83 @@ html.device-phone .credits-inner {
 
 .suspended-reason-text {
     font-family: 'Bebas Neue', sans-serif;
-    font-size: 26px;
+    font-size: 28px;
     letter-spacing: 2px;
     color: var(--dark);
-    line-height: 1.2;
+    line-height: 1.15;
+    word-break: break-word;
 }
 
 .suspended-by {
     font-size: 11px;
-    color: rgba(0,0,0,0.4);
+    color: rgba(0,0,0,0.38);
     letter-spacing: 1px;
-    margin-top: -6px;
+    font-style: italic;
 }
 
-.suspended-info {
-    background: var(--white);
-    border-left: 4px solid var(--red);
+.suspended-divider {
+    width: 100%;
+    height: 1px;
+    background: var(--light);
+}
+
+/* Notice row */
+.suspended-notice-row {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    background: #fff0f0;
+    border: 1px solid rgba(200,16,46,0.15);
+    border-radius: 6px;
     padding: 14px 16px;
+}
+
+.suspended-notice-icon {
+    font-size: 20px;
+    flex-shrink: 0;
+    margin-top: 1px;
+}
+
+.suspended-notice-text {
     font-size: 12px;
     color: rgba(0,0,0,0.6);
     line-height: 1.65;
+    margin: 0;
+}
+
+.suspended-notice-text strong {
+    color: var(--red);
+}
+
+/* Live clock row */
+.suspended-time-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 0;
+    border-top: 1px solid var(--light);
+    border-bottom: 1px solid var(--light);
+}
+
+.suspended-time-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    color: rgba(0,0,0,0.35);
+    text-transform: uppercase;
+}
+
+.suspended-time-value {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 22px;
+    color: var(--dark);
+    letter-spacing: 3px;
+}
+
+/* Back button */
+.suspended-back-btn {
+    width: 100%;
+    text-align: center;
+    padding: 12px;
+    margin-top: 4px;
 }

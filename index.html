@@ -85,18 +85,33 @@
             <div class="suspended-wrap">
                 <div class="suspended-hero">
                     <div class="kanji-bg">休</div>
-                    <div class="suspended-icon">🚫</div>
-                    <div class="suspended-title">ATTENDANCE<br>SUSPENDED</div>
+                    <div class="suspended-badge">SCANNING DISABLED</div>
+                    <div class="suspended-icon-big">🚫</div>
+                    <div class="suspended-title">ATTENDANCE<br>NOT ALLOWED</div>
                     <p class="suspended-school">Aringay National High School</p>
                 </div>
                 <div class="suspended-card">
-                    <div class="suspended-reason-label">REASON</div>
-                    <div class="suspended-reason-text" id="suspendedReasonDisplay">—</div>
-                    <div class="suspended-by" id="suspendedByDisplay"></div>
-                    <div class="suspended-info">
-                        Attendance recording has been temporarily disabled by your teacher. Please check back later or approach your teacher for assistance.
+                    <div class="suspended-card::before"></div>
+
+                    <div class="suspended-reason-block">
+                        <div class="suspended-reason-label">REASON BY TEACHER</div>
+                        <div class="suspended-reason-text" id="suspendedReasonDisplay">—</div>
+                        <div class="suspended-by" id="suspendedByDisplay"></div>
                     </div>
-                    <button class="action-back-btn" style="margin-top:8px;" onclick="goBackToScan()">← BACK TO LOGIN</button>
+
+                    <div class="suspended-divider"></div>
+
+                    <div class="suspended-notice-row">
+                        <span class="suspended-notice-icon">ℹ️</span>
+                        <p class="suspended-notice-text">Attendance scanning has been temporarily disabled by your teacher. You <strong>cannot time in or out</strong> at this time. Please approach your teacher for assistance.</p>
+                    </div>
+
+                    <div class="suspended-time-row">
+                        <span class="suspended-time-label">CURRENT TIME</span>
+                        <span class="suspended-time-value" id="suspendedClock">—</span>
+                    </div>
+
+                    <button class="action-back-btn suspended-back-btn" onclick="goBackToScan()">← SCAN AGAIN LATER</button>
                 </div>
             </div>
         </div>
