@@ -165,7 +165,10 @@
                     <div id="actionTodayRecord" class="action-today-record hidden">
                         <div class="today-row"><span>Time In</span><strong id="actionTodayIn">—</strong></div>
                         <div class="today-row"><span>Time Out</span><strong id="actionTodayOut">—</strong></div>
-
+                        <div id="actionPendingNotice" class="action-pending-notice hidden">
+                            <span>⏳</span>
+                            <span>Your scan is <strong>pending Secretary approval</strong>. Your original scan time will be recorded once confirmed.</span>
+                        </div>
                     </div>
 
                     <div class="action-btns">
@@ -231,6 +234,13 @@
                             <option value="teacher">Teachers</option>
                         </select>
                     </div>
+                    <div class="logs-toolbar" style="padding-top:0;">
+                        <select id="teacherSectionFilter" class="type-select" onchange="loadLogs('teacher')" style="width:100%;">
+                            <option value="all">All Sections</option>
+                            <option value="12-Newton">12-Newton</option>
+                            <option value="12-Pythagoras">12-Pythagoras</option>
+                        </select>
+                    </div>
                     <div id="teacherLogsDisplay" class="logs-list"></div>
                 </div>
 
@@ -270,6 +280,256 @@
                     </div>
 
                     <div id="suspendMsg" class="status-box info" style="display:none;"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══════════════════════════════════════════
+     SCREEN: SECRETARY — Logsheets only
+════════════════════════════════════════════ -->
+        <div id="screen-secretary" class="screen">
+            <div class="app-header">
+                <div class="app-header-inner">
+                    <div>
+                        <h2 class="app-title">PRESENCE</h2>
+                        <p class="app-school">Secretary Panel</p>
+                    </div>
+                    <div class="user-badge" id="secretaryBadge"></div>
+                    <button class="logout-btn" onclick="logout()">✕</button>
+                </div>
+            </div>
+            <nav class="tab-nav" id="secretaryNav">
+                <button class="tab-btn active" data-tab="secPendingTab">
+                    ⏳ PENDING
+                    <span id="pendingTabBadge" class="pending-tab-badge" style="display:none;"></span>
+                </button>
+                <button class="tab-btn" data-tab="secLogsTab">📋 LOGSHEETS</button>
+                <button class="tab-btn" data-tab="secExportTab">📤 EXPORT</button>
+            </nav>
+            <div class="app-body">
+                <!-- Pending Approval Queue Tab -->
+                <div id="secPendingTab" class="tab-pane active">
+                    <div class="pending-header-bar">
+                        <div class="pending-header-title">🕐 PENDING APPROVALS</div>
+                        <div class="pending-header-sub">Scans waiting for your confirmation. Original scan time is preserved when you confirm.</div>
+                    </div>
+                    <div class="pending-legend">
+                        <span class="pending-legend-item"><span class="pending-scan-type type-in" style="font-size:9px;padding:2px 8px;">⏰ TIME IN</span> Student tapped Time In</span>
+                        <span class="pending-legend-item"><span class="pending-scan-type type-out" style="font-size:9px;padding:2px 8px;">🚶 TIME OUT</span> Student tapped Time Out</span>
+                    </div>
+                    <div class="pending-refresh-row">
+                        <span class="pending-auto-label">🔄 Auto-refreshes every 15s</span>
+                        <button class="btn-small" onclick="loadPendingQueue()">↺ REFRESH NOW</button>
+                    </div>
+                    <div id="pendingQueueDisplay" class="pending-queue-list"></div>
+                </div>
+
+                <!-- Logs Tab -->
+                <div id="secLogsTab" class="tab-pane">
+                    <div class="logs-toolbar">
+                        <input type="date" id="secDateFilter" class="date-input" />
+                        <select id="secTypeFilter" class="type-select" onchange="loadLogs('secretary')">
+                            <option value="student">Students</option>
+                            <option value="teacher">Teachers</option>
+                        </select>
+                    </div>
+                    <div class="logs-toolbar" style="padding-top:0;">
+                        <select id="secSectionFilter" class="type-select" onchange="loadLogs('secretary')" style="width:100%;">
+                            <option value="all">All Sections</option>
+                            <option value="12-Newton">12-Newton</option>
+                            <option value="12-Pythagoras">12-Pythagoras</option>
+                        </select>
+                    </div>
+                    <div class="export-bar">
+                        <button class="btn-small" onclick="exportCSVRole('secretary')">⬇ Export CSV</button>
+                    </div>
+                    <div id="secLogsDisplay" class="logs-list"></div>
+                </div>
+                <!-- Export Tab -->
+                <div id="secExportTab" class="tab-pane">
+                    <div class="upload-panel-title" style="padding:18px 18px 10px;">📤 DOWNLOAD LOGSHEET</div>
+                    <div style="padding:0 18px 18px; display:flex; flex-direction:column; gap:14px;">
+                        <div class="upload-option-row">
+                            <label class="upload-opt-label">Date Range</label>
+                            <div style="display:flex;gap:8px;">
+                                <input type="date" id="secDateFrom" class="date-input" style="flex:1" />
+                                <input type="date" id="secDateTo" class="date-input" style="flex:1" />
+                            </div>
+                        </div>
+                        <div class="upload-option-row">
+                            <label class="upload-opt-label">Section</label>
+                            <select id="secExportSection" class="type-select" style="width:100%">
+                                <option value="all">All Sections</option>
+                                <option value="12-Newton">12-Newton (39 students)</option>
+                                <option value="12-Pythagoras">12-Pythagoras (42 students)</option>
+                            </select>
+                        </div>
+                        <button class="btn-primary" onclick="secretaryDownload()">
+                            <span class="btn-icon">⬇</span> DOWNLOAD XLSX
+                        </button>
+                        <div id="secExportStatus" class="status-box info" style="display:none;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══════════════════════════════════════════
+     SCREEN: ADVISER — Full access + multi-scan QR
+════════════════════════════════════════════ -->
+        <div id="screen-adviser" class="screen">
+            <div class="app-header">
+                <div class="app-header-inner">
+                    <div>
+                        <h2 class="app-title">PRESENCE</h2>
+                        <p class="app-school">Adviser Panel</p>
+                    </div>
+                    <div class="user-badge" id="adviserBadge"></div>
+                    <button class="logout-btn" onclick="logout()">✕</button>
+                </div>
+            </div>
+            <nav class="tab-nav" id="adviserNav">
+                <button class="tab-btn active" data-tab="advScanTab">📷 SCAN</button>
+                <button class="tab-btn" data-tab="advLogsTab">📋 LOGS</button>
+                <button class="tab-btn" data-tab="advStatsTab">📊 STATS</button>
+                <button class="tab-btn" data-tab="advSuspendTab" id="advSuspendTabBtn">🚫 SUSPEND</button>
+                <button class="tab-btn" data-tab="advTimeTab">⏰ MY TIME</button>
+            </nav>
+            <div class="app-body">
+                <!-- Scan Tab -->
+                <div id="advScanTab" class="tab-pane active">
+                    <div class="adviser-multi-scan-notice">
+                        <span class="adviser-multi-icon">🔄</span>
+                        <span>MULTI-SCAN ENABLED — Adviser QR can be scanned multiple times</span>
+                    </div>
+                    <div class="mode-bar">
+                        <button class="mode-btn active" id="advModeIn" onclick="setAdviserScanMode('IN')">⏰ TIME IN</button>
+                        <button class="mode-btn" id="advModeOut" onclick="setAdviserScanMode('OUT')">🚶 TIME OUT</button>
+                    </div>
+                    <div id="adviser-reader" class="reader-box"></div>
+                    <div id="adviserScanStatus" class="status-box info">
+                        <span class="status-dot"></span>
+                        <div><strong>READY TO SCAN</strong>
+                            <p>Point camera at QR code</p>
+                        </div>
+                    </div>
+                </div>
+                <!-- Logs Tab -->
+                <div id="advLogsTab" class="tab-pane">
+                    <div class="logs-toolbar">
+                        <input type="date" id="advDateFilter" class="date-input" />
+                        <select id="advTypeFilter" class="type-select" onchange="loadLogs('adviser')">
+                            <option value="student">Students</option>
+                            <option value="teacher">Teachers</option>
+                        </select>
+                    </div>
+                    <div class="logs-toolbar" style="padding-top:0;">
+                        <select id="advSectionFilter" class="type-select" onchange="loadLogs('adviser')" style="width:100%;">
+                            <option value="all">All Sections</option>
+                            <option value="12-Newton">12-Newton</option>
+                            <option value="12-Pythagoras">12-Pythagoras</option>
+                        </select>
+                    </div>
+                    <div class="export-bar">
+                        <button class="btn-small" onclick="exportCSVRole('adviser')">⬇ Export CSV</button>
+                    </div>
+                    <div id="advLogsDisplay" class="logs-list"></div>
+                </div>
+                <!-- Stats Tab -->
+                <div id="advStatsTab" class="tab-pane">
+                    <div id="advStatsDisplay" class="stats-grid"></div>
+                </div>
+                <!-- Suspend Tab -->
+                <div id="advSuspendTab" class="tab-pane">
+                    <div id="advSuspendStatusBanner" class="suspend-banner hidden"></div>
+                    <div class="suspend-card" id="advSuspendCard">
+                        <div class="suspend-card-title">🚫 SUSPEND ATTENDANCE</div>
+                        <p class="suspend-card-desc">Temporarily disables attendance scanning for all students today.</p>
+                        <div class="suspend-form">
+                            <label class="suspend-field-label">REASON FOR SUSPENSION</label>
+                            <div class="suspend-reason-chips" id="advSuspendReasonChips">
+                                <button class="reason-chip" onclick="selectReasonChipAdv(this, 'No Classes Today')">No Classes Today</button>
+                                <button class="reason-chip" onclick="selectReasonChipAdv(this, 'School Holiday')">School Holiday</button>
+                                <button class="reason-chip" onclick="selectReasonChipAdv(this, 'Typhoon Suspension')">Typhoon Suspension</button>
+                                <button class="reason-chip" onclick="selectReasonChipAdv(this, 'School Event')">School Event</button>
+                                <button class="reason-chip" onclick="selectReasonChipAdv(this, 'Other')">Other</button>
+                            </div>
+                            <textarea id="advSuspendReasonText" class="suspend-textarea" placeholder="Type a custom reason…" rows="3"></textarea>
+                        </div>
+                        <button class="btn-suspend" id="advBtnSuspend" onclick="adviserSuspend()">
+                            <span>🚫</span> SUSPEND ATTENDANCE
+                        </button>
+                    </div>
+                    <div class="resume-card hidden" id="advResumeCard">
+                        <div class="resume-card-title">✅ RE-ENABLE ATTENDANCE</div>
+                        <div class="resume-active-reason" id="advResumeActiveReason"></div>
+                        <button class="btn-resume" onclick="adviserResume()"><span>✅</span> RE-ENABLE ATTENDANCE</button>
+                    </div>
+                    <div id="advSuspendMsg" class="status-box info" style="display:none;"></div>
+                </div>
+                <!-- My Time Tab -->
+                <div id="advTimeTab" class="tab-pane">
+                    <div class="my-time-card">
+                        <div class="my-time-label">TODAY'S ATTENDANCE</div>
+                        <div class="own-time-display">
+                            <div class="time-row"><span>Time In</span><strong id="advTimeIn">—</strong></div>
+                            <div class="time-row"><span>Time Out</span><strong id="advTimeOut">—</strong></div>
+                            <div class="time-row"><span>Status</span><strong id="advStatus">—</strong></div>
+                        </div>
+                        <div class="own-time-btns">
+                            <button class="btn-primary" onclick="adviserSelfTimeIn()">⏰ RECORD TIME IN</button>
+                            <button class="btn-secondary" onclick="adviserSelfTimeOut()">🚶 RECORD TIME OUT</button>
+                        </div>
+                        <div id="advTimeMsg" class="status-box info" style="display:none;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══════════════════════════════════════════
+     SCREEN: PHOTO AUTH — Verify identity via photo
+════════════════════════════════════════════ -->
+        <div id="screen-photo-auth" class="screen">
+            <div class="photo-auth-wrap">
+                <div class="photo-auth-hero">
+                    <div class="kanji-bg">顔</div>
+                    <div class="photo-auth-brand">PRESENCE</div>
+                    <p class="photo-auth-school">Aringay National High School</p>
+                    <p class="photo-auth-sub">Photo Verification</p>
+                </div>
+                <div class="photo-auth-card">
+                    <div class="photo-auth-user-info">
+                        <div class="photo-auth-name" id="photoAuthName">—</div>
+                        <div class="photo-auth-id" id="photoAuthId">ID: —</div>
+                        <div class="photo-auth-role-badge" id="photoAuthRoleBadge">—</div>
+                    </div>
+                    <div class="photo-auth-instructions">
+                        <span class="photo-auth-step">📷</span>
+                        <p>Take a clear photo of your face for verification. Ensure good lighting and look directly at the camera.</p>
+                    </div>
+                    <div class="photo-auth-camera-box">
+                        <video id="photoAuthVideo" autoplay playsinline class="photo-auth-video"></video>
+                        <canvas id="photoAuthCanvas" class="photo-auth-canvas" style="display:none;"></canvas>
+                        <div class="photo-auth-overlay">
+                            <div class="photo-auth-face-guide"></div>
+                        </div>
+                    </div>
+                    <div id="photoAuthPreview" class="photo-auth-preview hidden">
+                        <img id="photoAuthImg" src="" alt="Captured photo" class="photo-auth-captured-img" />
+                        <div class="photo-auth-preview-label">PHOTO CAPTURED</div>
+                    </div>
+                    <div class="photo-auth-btns">
+                        <button id="photoCaptureBtn" class="btn-primary" onclick="captureAuthPhoto()">
+                            <span class="btn-icon">📸</span> CAPTURE PHOTO
+                        </button>
+                        <button id="photoRetakeBtn" class="btn-secondary hidden" onclick="retakeAuthPhoto()">
+                            🔄 RETAKE
+                        </button>
+                        <button id="photoConfirmBtn" class="btn-primary hidden" onclick="confirmAuthPhoto()" style="background:var(--green);">
+                            ✅ CONFIRM & CONTINUE
+                        </button>
+                    </div>
+                    <div id="photoAuthMsg" class="status-box info" style="display:none;"></div>
+                    <button class="action-back-btn" onclick="cancelPhotoAuth()">← CANCEL</button>
                 </div>
             </div>
         </div>
@@ -318,6 +578,13 @@
                         <select id="adminTypeFilter" class="type-select" onchange="loadLogs('admin')">
                             <option value="student">Students</option>
                             <option value="teacher">Teachers</option>
+                        </select>
+                    </div>
+                    <div class="logs-toolbar" style="padding-top:0;">
+                        <select id="adminSectionFilter" class="type-select" onchange="loadLogs('admin')" style="width:100%;">
+                            <option value="all">All Sections</option>
+                            <option value="12-Newton">12-Newton</option>
+                            <option value="12-Pythagoras">12-Pythagoras</option>
                         </select>
                     </div>
                     <div class="export-bar">
@@ -389,6 +656,37 @@
         </div>
 
     </div> <!-- /.container -->
+
+    <!-- ═══════════════════════════════════════════
+     MODAL: STUDENT PHOTO CAPTURE (Time In / Out)
+════════════════════════════════════════════ -->
+    <div id="studentPhotoModal" class="spm-overlay hidden">
+        <div class="spm-card">
+            <div class="spm-header">
+                <div class="spm-title" id="spmTitle">📸 PHOTO VERIFICATION</div>
+                <div class="spm-sub" id="spmSub">Take a photo before recording your time</div>
+            </div>
+            <div class="spm-camera-wrap">
+                <video id="spmVideo" autoplay playsinline class="spm-video"></video>
+                <canvas id="spmCanvas" class="spm-canvas" style="display:none;"></canvas>
+                <div class="spm-face-ring"></div>
+            </div>
+            <div id="spmPreview" class="spm-preview hidden">
+                <img id="spmImg" src="" alt="Captured" class="spm-captured" />
+                <div class="spm-preview-label">✅ PHOTO CAPTURED</div>
+            </div>
+            <div class="spm-btns">
+                <button id="spmCaptureBtn" class="btn-primary" onclick="spmCapture()">
+                    <span class="btn-icon">📸</span> CAPTURE
+                </button>
+                <button id="spmRetakeBtn" class="btn-secondary hidden" onclick="spmRetake()">🔄 RETAKE</button>
+                <button id="spmConfirmBtn" class="btn-primary hidden" onclick="spmConfirm()" style="background:var(--green);">
+                    ✅ CONFIRM
+                </button>
+            </div>
+            <button class="action-back-btn" style="margin-top:8px;" onclick="spmCancel()">← CANCEL</button>
+        </div>
+    </div>
 
     <!-- PC RIGHT PANEL -->
     <div class="pc-right-panel">

@@ -86,11 +86,30 @@ document.addEventListener('DOMContentLoaded', () => {
     // Admin tabs
     wireTabNav('adminNav', onAdminTabChange);
 
+    // Adviser tabs
+    wireTabNav('adviserNav', onAdviserTabChange);
+
+    // Secretary tabs
+    wireTabNav('secretaryNav', onSecretaryTabChange);
+
     // Date filters — default to today
     const today = todayDate();
-    ['teacherDateFilter', 'adminDateFilter'].forEach(id => {
+    ['teacherDateFilter', 'adminDateFilter', 'secDateFilter', 'advDateFilter'].forEach(id => {
         const el = document.getElementById(id);
-        if (el) { el.value = today; el.addEventListener('change', () => loadLogs(id.includes('teacher') ? 'teacher' : 'admin')); }
+        if (el) {
+            el.value = today;
+            el.addEventListener('change', () => {
+                if (id.includes('teacher')) loadLogs('teacher');
+                else if (id.includes('sec')) loadLogs('secretary');
+                else if (id.includes('adv')) loadLogs('adviser');
+                else loadLogs('admin');
+            });
+        }
+    });
+    // Default export date ranges
+    ['secDateFrom', 'secDateTo'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el && !el.value) el.value = today;
     });
 });
 
@@ -194,22 +213,24 @@ async function startLoginScanner() {
 async function handleLogin(qrData) {
     const raw = qrData.trim();
     console.log('QR RAW VALUE:', JSON.stringify(raw)); // Debug — check browser console
-    let type = 'student', id = '', name = '';
+    let type = 'student', id = '', name = '', section = null;
 
     if (raw.includes('|')) {
-        // Format: TYPE|ID|Name
+        // Format: TYPE|ID|Name|Section
         const parts = raw.split('|');
         const rawType = parts[0].trim().toLowerCase();
         // Only treat first segment as type if it's a known role keyword
-        if (['student', 'teacher', 'admin'].includes(rawType)) {
+        if (['student', 'teacher', 'admin', 'adviser', 'secretary'].includes(rawType)) {
             type = rawType;
             id = (parts[1] || '').trim();
             name = (parts[2] || id).trim();
+            section = (parts[3] || '').trim() || null;  // e.g. "12-Newton"
         } else {
             // Pipe-separated but no role prefix — treat whole thing or first part as LRN/name
             id = parts[0].trim();
             name = parts[1]?.trim() || id;
             type = 'student';
+            section = parts[2]?.trim() || null;
         }
     } else if (/^\d{6,12}$/.test(raw)) {
         // Pure numeric — treat as LRN
@@ -231,8 +252,11 @@ async function handleLogin(qrData) {
         setStatus('loginStatus', 'error', 'INVALID QR', 'Could not read ID from this QR code.');
         resetLoginBtn(); return;
     }
-    currentUser = { type, id, name };
+    currentUser = { type, id, name, section };
 
+    // ── PHOTO AUTHENTICATION CHECK ─────────────────────────────────────────
+    // All roles except students go through photo auth before their screen.
+    // Students are handled separately (they go to action page).
     if (currentUser.type === 'student') {
         // Check if attendance is suspended before showing the action page
         const suspState = await getSuspensionState();
@@ -255,16 +279,38 @@ async function handleLogin(qrData) {
         // Students go directly to the Time In / Time Out action page
         await showStudentActionPage(currentUser.id, currentUser.name);
     } else if (currentUser.type === 'teacher') {
-        document.getElementById('teacherBadge').innerHTML = `${currentUser.name}<br><span style="font-size:9px;opacity:0.7">TEACHER</span>`;
-        showScreen('teacher');
-        loadTeacherOwnTime();
-        // Refresh suspend tab badge if currently suspended
-        getSuspensionState().then(s => { if (s.suspended) document.getElementById('teacherSuspendTabBtn')?.classList.add('suspended-active'); });
+        // Teachers go through photo auth first
+        await startPhotoAuth(() => {
+            document.getElementById('teacherBadge').innerHTML = `${currentUser.name}<br><span style="font-size:9px;opacity:0.7">TEACHER</span>`;
+            showScreen('teacher');
+            loadTeacherOwnTime();
+            getSuspensionState().then(s => { if (s.suspended) document.getElementById('teacherSuspendTabBtn')?.classList.add('suspended-active'); });
+        });
+    } else if (currentUser.type === 'adviser') {
+        // Adviser goes through photo auth first
+        await startPhotoAuth(() => {
+            document.getElementById('adviserBadge').innerHTML = `${currentUser.name}<br><span style="font-size:9px;opacity:0.7">ADVISER</span>`;
+            showScreen('adviser');
+            startAdviserScanner();
+            loadAdviserStats();
+            getSuspensionState().then(s => { if (s.suspended) document.getElementById('advSuspendTabBtn')?.classList.add('suspended-active'); });
+        });
+    } else if (currentUser.type === 'secretary') {
+        // Secretary goes through photo auth first
+        await startPhotoAuth(() => {
+            document.getElementById('secretaryBadge').innerHTML = `${currentUser.name}<br><span style="font-size:9px;opacity:0.7">SECRETARY</span>`;
+            showScreen('secretary');
+            startPendingAutoRefresh();
+            loadLogs('secretary');
+        });
     } else if (currentUser.type === 'admin') {
-        document.getElementById('adminBadge').innerHTML = `${currentUser.name}<br><span style="font-size:9px;opacity:0.7">ADMIN</span>`;
-        showScreen('admin');
-        await startAdminScanner();
-        loadStats();
+        // Admin goes through photo auth first
+        await startPhotoAuth(() => {
+            document.getElementById('adminBadge').innerHTML = `${currentUser.name}<br><span style="font-size:9px;opacity:0.7">ADMIN</span>`;
+            showScreen('admin');
+            startAdminScanner();
+            loadStats();
+        });
     } else {
         setStatus('loginStatus', 'error', 'UNKNOWN ROLE', `"${type}" is not recognized.`);
     }
@@ -273,6 +319,7 @@ async function handleLogin(qrData) {
 // ── LOGOUT ────────────────────────────────────
 async function logout() {
     activeScanner = await stopScanner(activeScanner);
+    stopPendingAutoRefresh();
     currentUser = null; scanMode = 'IN'; scanLock = false;
     // Reset login screen
     const btn = document.getElementById('loginScanBtn');
@@ -325,9 +372,9 @@ async function onStudentScan(qrData) {
     scanLock = true;
     const parts = qrData.trim().split('|');
     if (!parts[0] || parts[0].trim().toUpperCase() !== 'STUDENT') { scanLock = false; return; }
-    const [_, id, name] = parts;
+    const [_, id, name, sec] = parts;
     setStatus('studentStatus', 'info', 'PROCESSING...', 'Please wait');
-    await recordAttendance('student', id.trim(), name ? name.trim() : id.trim(), 'studentStatus');
+    await recordAttendance('student', id.trim(), name ? name.trim() : id.trim(), 'studentStatus', sec?.trim() || null);
     setTimeout(() => { scanLock = false; }, 2000);
 }
 
@@ -367,20 +414,58 @@ async function showStudentActionPage(id, name) {
     const { data: existing } = await db.from('attendance_logs')
         .select('*').eq('lrn', id).eq('date', today).eq('person_type', 'student').maybeSingle();
 
+    // Check ONLY truly-Pending rows, split by scan type to avoid stale Confirmed rows blocking
+    const { data: pendingInRec } = await db.from('attendance_pending')
+        .select('*').eq('lrn', id).eq('date', today).eq('person_type', 'student')
+        .eq('scan_type', 'IN').eq('approval_status', 'Pending').maybeSingle();
+
+    const { data: pendingOutRec } = await db.from('attendance_pending')
+        .select('*').eq('lrn', id).eq('date', today).eq('person_type', 'student')
+        .eq('scan_type', 'OUT').eq('approval_status', 'Pending').maybeSingle();
+
     const recEl = document.getElementById('actionTodayRecord');
     const btnIn = document.getElementById('actionBtnIn');
     const btnOut = document.getElementById('actionBtnOut');
+    const pendingNotice = document.getElementById('actionPendingNotice');
+
+    // Reset button states first
+    btnIn.classList.remove('action-btn-done', 'action-btn-pending'); btnIn.disabled = false;
+    btnOut.classList.remove('action-btn-done', 'action-btn-pending'); btnOut.disabled = false;
+    pendingNotice?.classList.add('hidden');
 
     if (existing) {
-        document.getElementById('actionTodayIn').textContent = (existing.time_in || '---') + ' (' + existing.status + ')';
-        document.getElementById('actionTodayOut').textContent = existing.time_out || '---';
+        // Has confirmed time-in
+        const inText = (existing.time_in || '---') + ' (' + existing.status + ')';
+        let outText = existing.time_out || '---';
+
+        // If time-out is pending Secretary approval, show that
+        if (!existing.time_out && pendingOutRec) {
+            outText = `${pendingOutRec.scanned_time_out} ⏳ PENDING`;
+            btnOut.classList.add('action-btn-pending'); btnOut.disabled = true;
+            pendingNotice?.classList.remove('hidden');
+        } else if (existing.time_out) {
+            btnOut.classList.add('action-btn-done'); btnOut.disabled = true;
+        }
+
+        document.getElementById('actionTodayIn').textContent = inText;
+        document.getElementById('actionTodayOut').textContent = outText;
         recEl.classList.remove('hidden');
-        if (existing.time_in) { btnIn.classList.add('action-btn-done'); btnIn.disabled = true; }
-        if (existing.time_out) { btnOut.classList.add('action-btn-done'); btnOut.disabled = true; }
+        btnIn.classList.add('action-btn-done'); btnIn.disabled = true;
+
+    } else if (pendingInRec) {
+        // Time-in is pending Secretary approval
+        document.getElementById('actionTodayIn').textContent = `${pendingInRec.scanned_time_in} ⏳ PENDING`;
+        document.getElementById('actionTodayOut').textContent = '---';
+        recEl.classList.remove('hidden');
+        pendingNotice?.classList.remove('hidden');
+        btnIn.classList.add('action-btn-pending'); btnIn.disabled = true;
+        const sub = btnIn.querySelector('.action-btn-sub');
+        if (sub) sub.textContent = 'Awaiting approval';
+        // Cannot time out until time-in is confirmed
+        btnOut.disabled = true;
+
     } else {
         recEl.classList.add('hidden');
-        btnIn.classList.remove('action-btn-done'); btnIn.disabled = false;
-        btnOut.classList.remove('action-btn-done'); btnOut.disabled = false;
     }
 
     document.getElementById('actionMsg').style.display = 'none';
@@ -398,23 +483,49 @@ async function studentAction(mode) {
     btnOut.disabled = true;
     msgEl.style.display = 'none';
 
-    const success = await recordAttendance('student', id, name, mode, 'actionMsg');
+    await recordAttendance('student', id, name, mode, 'actionMsg', currentUser.section);
     msgEl.style.display = 'flex';
 
-    // Refresh today record
+    // Refresh — use split queries to avoid stale Confirmed rows blocking
     const today = todayDate();
     const { data: updated } = await db.from('attendance_logs')
         .select('*').eq('lrn', id).eq('date', today).eq('person_type', 'student').maybeSingle();
+    const { data: updPendingIn } = await db.from('attendance_pending')
+        .select('*').eq('lrn', id).eq('date', today).eq('person_type', 'student')
+        .eq('scan_type', 'IN').eq('approval_status', 'Pending').maybeSingle();
+    const { data: updPendingOut } = await db.from('attendance_pending')
+        .select('*').eq('lrn', id).eq('date', today).eq('person_type', 'student')
+        .eq('scan_type', 'OUT').eq('approval_status', 'Pending').maybeSingle();
+
+    const recEl = document.getElementById('actionTodayRecord');
+    const notice = document.getElementById('actionPendingNotice');
+    btnIn.classList.remove('action-btn-done', 'action-btn-pending');
+    btnOut.classList.remove('action-btn-done', 'action-btn-pending');
+    notice?.classList.add('hidden');
+
     if (updated) {
+        let outText = updated.time_out || '---';
+        if (!updated.time_out && updPendingOut) {
+            outText = `${updPendingOut.scanned_time_out} ⏳ PENDING`;
+            btnOut.classList.add('action-btn-pending'); btnOut.disabled = true;
+            notice?.classList.remove('hidden');
+        } else if (updated.time_out) {
+            btnOut.classList.add('action-btn-done'); btnOut.disabled = true;
+        }
         document.getElementById('actionTodayIn').textContent = (updated.time_in || '---') + ' (' + updated.status + ')';
-        document.getElementById('actionTodayOut').textContent = updated.time_out || '---';
-        document.getElementById('actionTodayRecord').classList.remove('hidden');
-        if (updated.time_in) { btnIn.classList.add('action-btn-done'); btnIn.disabled = true; }
-        if (updated.time_out) { btnOut.classList.add('action-btn-done'); btnOut.disabled = true; }
+        document.getElementById('actionTodayOut').textContent = outText;
+        recEl.classList.remove('hidden');
+        btnIn.classList.add('action-btn-done'); btnIn.disabled = true;
+    } else if (updPendingIn) {
+        document.getElementById('actionTodayIn').textContent = `${updPendingIn.scanned_time_in} ⏳ PENDING`;
+        document.getElementById('actionTodayOut').textContent = '---';
+        recEl.classList.remove('hidden');
+        btnIn.classList.add('action-btn-pending'); btnIn.disabled = true;
+        btnOut.disabled = true;
+        notice?.classList.remove('hidden');
     }
 
-    if (success) setTimeout(() => goBackToScan(), 3000);
-    else setTimeout(() => goBackToScan(), 3000);
+    setTimeout(() => goBackToScan(), 3500);
 }
 
 
@@ -593,32 +704,47 @@ async function resumeAttendance() {
 
 // Teacher logs
 async function loadLogs(role) {
-    const dateId = role === 'teacher' ? 'teacherDateFilter' : 'adminDateFilter';
-    const typeId = role === 'teacher' ? 'teacherTypeFilter' : 'adminTypeFilter';
-    const dispId = role === 'teacher' ? 'teacherLogsDisplay' : 'adminLogsDisplay';
+    const dateId = role === 'teacher' ? 'teacherDateFilter' : role === 'secretary' ? 'secDateFilter' : role === 'adviser' ? 'advDateFilter' : 'adminDateFilter';
+    const typeId = role === 'teacher' ? 'teacherTypeFilter' : role === 'secretary' ? 'secTypeFilter' : role === 'adviser' ? 'advTypeFilter' : 'adminTypeFilter';
+    const dispId = role === 'teacher' ? 'teacherLogsDisplay' : role === 'secretary' ? 'secLogsDisplay' : role === 'adviser' ? 'advLogsDisplay' : 'adminLogsDisplay';
+    const sectionId = role === 'teacher' ? 'teacherSectionFilter' : role === 'secretary' ? 'secSectionFilter' : role === 'adviser' ? 'advSectionFilter' : 'adminSectionFilter';
+
     const date = document.getElementById(dateId)?.value || todayDate();
     const type = document.getElementById(typeId)?.value || 'student';
+    const section = document.getElementById(sectionId)?.value || 'all';
     const display = document.getElementById(dispId);
     if (!display) return;
     display.innerHTML = '<div class="logs-empty">Loading...</div>';
 
-    const { data, error } = await db.from('attendance_logs')
+    let query = db.from('attendance_logs')
         .select('*').eq('date', date).eq('person_type', type)
         .order('time_in', { ascending: false });
+
+    // Apply section filter if not 'all'
+    if (section && section !== 'all') {
+        query = query.eq('section', section);
+    }
+
+    const { data, error } = await query;
 
     if (error) { display.innerHTML = `<div class="logs-empty">Error: ${error.message}</div>`; return; }
     if (!data?.length) { display.innerHTML = '<div class="logs-empty">No records found for this date.</div>'; return; }
 
-    display.innerHTML = data.map(log => {
+    // Section summary badge
+    const sectionLabel = section !== 'all' ? `<div class="section-count-badge">📚 ${section} — ${data.length} record(s)</div>` : '';
+
+    display.innerHTML = sectionLabel + data.map(log => {
         const statusClass = log.status === 'Late' ? 'late' : log.status === 'Half Day' ? 'halfday' : log.status === 'No Time Out' ? 'noout' : log.status === 'Cutting Class' ? 'cutting' : 'ontime';
         const noTimeOut = !log.time_out;
-        const forceBtn = noTimeOut
+        const canForceOut = (role === 'admin' || role === 'adviser') && noTimeOut;
+        const forceBtn = canForceOut
             ? `<button class="force-out-btn" onclick="forceStudentTimeOut('${log.id}', '${log.full_name.replace(/'/g, "\\'")}', '${role}')">⏏ OUT</button>`
             : '';
+        const sectionTag = log.section ? `<span class="log-section-tag">${log.section}</span>` : '';
         return `<div class="log-item" id="log-row-${log.id}">
             <div>
                 <span class="log-name">${log.full_name}</span>
-                <span class="log-meta">IN: ${log.time_in || '—'} &nbsp;|&nbsp; OUT: ${log.time_out || '—'} &nbsp;|&nbsp; ID: ${log.lrn}</span>
+                <span class="log-meta">IN: ${log.time_in || '—'} &nbsp;|&nbsp; OUT: ${log.time_out || '—'} &nbsp;|&nbsp; ID: ${log.lrn} ${sectionTag}</span>
             </div>
             <div style="display:flex;align-items:center;gap:6px;">
                 ${forceBtn}
@@ -838,10 +964,10 @@ async function onAdminScan(qrData) {
     const parts = qrData.trim().split('|');
     const type = parts[0]?.trim().toUpperCase();
     if (type !== 'STUDENT' && type !== 'TEACHER') { scanLock = false; return; }
-    const [_, id, name] = parts;
+    const [_, id, name, sec] = parts;
     const personType = type.toLowerCase();
     setStatus('adminScanStatus', 'info', 'PROCESSING...', 'Please wait');
-    await recordAttendance(personType, id.trim(), name ? name.trim() : id.trim(), 'adminScanStatus');
+    await recordAttendance(personType, id.trim(), name ? name.trim() : id.trim(), 'adminScanStatus', sec?.trim() || null);
     setTimeout(() => { scanLock = false; }, 2000);
 }
 
@@ -855,51 +981,6 @@ async function startAdminScannerIfNeeded(tabId) {
     if (tabId === 'adminLogsTab') loadLogs('admin');
     if (tabId === 'adminStatsTab') loadStats();
     if (tabId === 'adminStudentsTab') searchPeople();
-}
-
-// Stats
-async function loadStats() {
-    const today = todayDate();
-    const el = document.getElementById('statsDisplay');
-    if (!el) return;
-    el.innerHTML = '<div style="padding:20px;color:#888;font-size:13px;">Loading stats...</div>';
-
-    const [stuToday, tchToday, stuLate, stuHalf, stuNoOut, stuAll] = await Promise.all([
-        db.from('attendance_logs').select('id', { count: 'exact' }).eq('date', today).eq('person_type', 'student'),
-        db.from('attendance_logs').select('id', { count: 'exact' }).eq('date', today).eq('person_type', 'teacher'),
-        db.from('attendance_logs').select('id', { count: 'exact' }).eq('date', today).eq('person_type', 'student').eq('status', 'Late'),
-        db.from('attendance_logs').select('id', { count: 'exact' }).eq('date', today).eq('person_type', 'student').eq('status', 'Half Day'),
-        db.from('attendance_logs').select('id', { count: 'exact' }).eq('date', today).eq('person_type', 'student').is('time_out', null),
-        db.from('attendance_logs').select('id', { count: 'exact' }).eq('person_type', 'student'),
-    ]);
-
-    el.innerHTML = `
-        <div class="stat-card highlight">
-            <div class="stat-label">Students Present Today</div>
-            <div class="stat-value">${stuToday.count ?? 0}</div>
-        </div>
-        <div class="stat-card highlight">
-            <div class="stat-label">Teachers Present Today</div>
-            <div class="stat-value">${tchToday.count ?? 0}</div>
-        </div>
-        <div class="stat-card warn">
-            <div class="stat-label">Late Today</div>
-            <div class="stat-value">${stuLate.count ?? 0}</div>
-        </div>
-        <div class="stat-card warn">
-            <div class="stat-label">Half Day Today</div>
-            <div class="stat-value">${stuHalf.count ?? 0}</div>
-        </div>
-        <div class="stat-card warn">
-            <div class="stat-label">No Time Out Yet</div>
-            <div class="stat-value">${stuNoOut.count ?? 0}</div>
-            <div class="stat-sub">Still inside campus</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-label">Total Records (All Time)</div>
-            <div class="stat-value">${stuAll.count ?? 0}</div>
-        </div>
-    `;
 }
 
 // People search
@@ -950,69 +1031,129 @@ async function exportCSV() {
 
 // ══════════════════════════════════════════════
 //  CORE: RECORD ATTENDANCE
+//  Writes to attendance_pending first.
+//  Secretary confirms → moves to attendance_logs.
+//  Original scanned time is always preserved.
 // ══════════════════════════════════════════════
-async function recordAttendance(personType, lrn, name, mode, statusElId) {
+async function recordAttendance(personType, lrn, name, mode, statusElId, section = null) {
     const now = new Date();
     const date = now.toISOString().split('T')[0];
     const time = nowTime();
     const mins = now.getHours() * 60 + now.getMinutes();
 
     try {
+        // ── Check attendance_logs for already-confirmed record ──
         const { data: existing, error: fetchErr } = await db
             .from('attendance_logs').select('*')
             .eq('lrn', lrn).eq('date', date).eq('person_type', personType)
             .maybeSingle();
         if (fetchErr) throw fetchErr;
 
+        // ── Check attendance_pending — ONLY truly Pending rows, separated by scan type ──
+        // CRITICAL: Must filter approval_status = 'Pending' to avoid matching already-
+        // Confirmed/Rejected rows — that was causing time-out to silently block.
+        const { data: pendingIn } = await db
+            .from('attendance_pending').select('*')
+            .eq('lrn', lrn).eq('date', date).eq('person_type', personType)
+            .eq('scan_type', 'IN').eq('approval_status', 'Pending')
+            .maybeSingle();
+
+        const { data: pendingOut } = await db
+            .from('attendance_pending').select('*')
+            .eq('lrn', lrn).eq('date', date).eq('person_type', personType)
+            .eq('scan_type', 'OUT').eq('approval_status', 'Pending')
+            .maybeSingle();
+
         if (mode === 'IN') {
+            // Already confirmed in attendance_logs
             if (existing) {
                 setStatus(statusElId, 'warning', 'ALREADY TIMED IN',
-                    `${name} checked in at ${existing.time_in} — ${existing.status}`);
+                    `${name} confirmed at ${existing.time_in} — ${existing.status}`);
                 return false;
             }
-            // TIME IN status rules:
-            // On Time  : 7:34 and earlier
-            // Late     : 7:35 – 11:59
-            // Half Day : 12:00 PM and later
+            // Already a pending time-in waiting for Secretary
+            if (pendingIn) {
+                setStatus(statusElId, 'warning', 'SCAN PENDING APPROVAL',
+                    `${name} scanned at ${pendingIn.scanned_time_in}. Awaiting Secretary confirmation.`);
+                return false;
+            }
+
+            // Compute status
             let status;
             if (mins <= 7 * 60 + 34) status = 'On Time';
             else if (mins < 12 * 60) status = 'Late';
             else status = 'Half Day';
 
-            const { error: insErr } = await db.from('attendance_logs').insert({
-                lrn, full_name: name, date, time_in: time, status, person_type: personType
+            const { error: insErr } = await db.from('attendance_pending').insert({
+                lrn, full_name: name, date,
+                scanned_time_in: time,
+                computed_status: status,
+                person_type: personType,
+                approval_status: 'Pending',
+                scan_type: 'IN',
+                section: section || null
             });
             if (insErr) throw insErr;
-            setStatus(statusElId, 'success', `TIME IN — ${status}`, `${name} at ${time}`);
-            flashSuccess(); showToast(`✓ ${name} — ${status}`);
+
+            setStatus(statusElId, 'info', `⏳ PENDING APPROVAL`,
+                `${name} scanned at ${time} (${status}) — awaiting Secretary confirmation`);
+            showToast(`⏳ ${name} — Pending approval`);
             return true;
 
         } else {
+            // ──────────────────────────────────────────────────────────────
             // TIME OUT
-            if (!existing) {
-                setStatus(statusElId, 'error', 'NO TIME IN RECORD', `${name} hasn't timed in today.`);
-                return false;
-            }
-            if (existing.time_out) {
-                setStatus(statusElId, 'warning', 'ALREADY TIMED OUT', `${name} left at ${existing.time_out}`);
-                return false;
-            }
-            // TIME OUT status rules:
-            // If time out is between 12:00 and before 4:00 PM → Half Day
-            // If time out is 4:00 PM or later → keep original time-in status (Full day)
-            const h = now.getHours();
-            let updatedStatus = existing.status; // keep original by default
-            if (h >= 12 && h < 16) {
-                updatedStatus = 'Half Day'; // timed out before 4PM = half day
+            // ──────────────────────────────────────────────────────────────
+
+            // Case 1: Has a confirmed time-in in attendance_logs → normal flow
+            if (existing) {
+                if (existing.time_out) {
+                    setStatus(statusElId, 'warning', 'ALREADY TIMED OUT',
+                        `${name} left at ${existing.time_out}`);
+                    return false;
+                }
+                // Already submitted a pending time-out
+                if (pendingOut) {
+                    setStatus(statusElId, 'warning', 'TIME OUT PENDING',
+                        `${name} scanned out at ${pendingOut.scanned_time_out} — awaiting Secretary confirmation.`);
+                    return false;
+                }
+
+                // Compute time-out status
+                const h = now.getHours();
+                let updatedStatus = existing.status; // keep original by default
+                if (h >= 12 && h < 16) updatedStatus = 'Half Day';
+
+                // Write to pending with log_id so Secretary can update the right row
+                const { error: outErr } = await db.from('attendance_pending').insert({
+                    lrn, full_name: name, date,
+                    scanned_time_out: time,
+                    computed_status: updatedStatus,
+                    person_type: personType,
+                    approval_status: 'Pending',
+                    scan_type: 'OUT',
+                    log_id: existing.id,
+                    section: section || null
+                });
+                if (outErr) throw outErr;
+
+                setStatus(statusElId, 'info', `⏳ TIME OUT PENDING`,
+                    `${name} scanned out at ${time} — awaiting Secretary confirmation`);
+                showToast(`⏳ ${name} — Time out pending`);
+                return true;
             }
 
-            const { error: updErr } = await db.from('attendance_logs')
-                .update({ time_out: time, status: updatedStatus })
-                .eq('id', existing.id);
-            if (updErr) throw updErr;
-            setStatus(statusElId, 'success', `TIME OUT — ${updatedStatus}`, `${name} at ${time}`);
-            flashSuccess(); showToast(`✓ ${name} timed out`);
-            return true;
+            // Case 2: Time-in is still waiting for Secretary approval
+            if (pendingIn) {
+                setStatus(statusElId, 'warning', 'TIME IN NOT YET CONFIRMED',
+                    `${name}\'s time-in is still pending Secretary approval. Cannot time out yet.`);
+                return false;
+            }
+
+            // Case 3: No record at all
+            setStatus(statusElId, 'error', 'NO TIME IN RECORD',
+                `${name} hasn\'t timed in today.`);
+            return false;
         }
     } catch (e) {
         setStatus(statusElId, 'error', 'DATABASE ERROR', e.message || 'Unknown error');
@@ -1020,7 +1161,6 @@ async function recordAttendance(personType, lrn, name, mode, statusElId) {
         return false;
     }
 }
-
 // ── HELPERS ───────────────────────────────────
 function resetLoginBtn() {
     const btn = document.getElementById('loginScanBtn');
@@ -1287,6 +1427,19 @@ async function loadUploadHistory() {
 // ══════════════════════════════════════════════
 //  PC SIDE PANELS — clock + live stats
 // ══════════════════════════════════════════════
+// ── Poll pending badge count (for Secretary tab badge) ───────────────────────
+async function pollPendingBadge() {
+    const today = todayDate();
+    const { count } = await db.from('attendance_pending')
+        .select('id', { count: 'exact', head: true })
+        .eq('date', today).eq('approval_status', 'Pending');
+    const badge = document.getElementById('pendingTabBadge');
+    if (badge) {
+        badge.textContent = count > 0 ? count : '';
+        badge.style.display = count > 0 ? 'inline-flex' : 'none';
+    }
+}
+
 function initPCPanels() {
     if (document.documentElement.classList.contains('device-phone')) return;
 
@@ -1325,6 +1478,7 @@ async function loadPCStats() {
 document.addEventListener('DOMContentLoaded', () => {
     initPCPanels();
     scheduleMidnightReset();
+    schedule5PMPurge();
 });
 
 // ══════════════════════════════════════════════
@@ -1453,6 +1607,12 @@ async function midnightSaveAndReset() {
                 console.log(`[PRESENCE] Cleared ${data.length} records for ${dateStr}`);
             }
 
+            // ── 5b. Clean up yesterday's pending rows too ──
+            await db.from('attendance_pending')
+                .delete()
+                .eq('date', dateStr);
+            console.log(`[PRESENCE] Cleared pending rows for ${dateStr}`);
+
             showToast(`✓ Daily log saved & table reset: ${fileName}`);
 
         } else {
@@ -1493,3 +1653,1023 @@ async function midnightSaveAndReset() {
     console.log('[PRESENCE] Midnight reset complete — back to login screen.');
 }
 
+// ══════════════════════════════════════════════
+//  5 PM AUTO-PURGE — UNAPPROVED PENDING SCANS
+//
+//  At exactly 5:00 PM each day, any scan still sitting
+//  in attendance_pending with approval_status = 'Pending'
+//  is considered abandoned.  The purge does THREE things:
+//
+//    1. Marks the pending row as 'Expired' (keeps audit trail)
+//    2. If the student had a confirmed time-in but the time-out
+//       was pending → marks them "No Time Out" in attendance_logs
+//    3. If the time-IN itself was never confirmed → the student
+//       is fully removed from attendance_logs for that day
+//       (they never officially checked in before the cutoff)
+//
+//  Uses the same polling approach as the midnight reset
+//  (every 30s check) so it survives tab throttling.
+// ══════════════════════════════════════════════
+let _5pmFired = false;
+
+function schedule5PMPurge() {
+    setInterval(async () => {
+        const now = new Date();
+        const h = now.getHours();
+        const m = now.getMinutes();
+
+        // Fire at 17:00–17:01 (5:00–5:01 PM)
+        if (h === 17 && m <= 1) {
+            if (!_5pmFired) {
+                _5pmFired = true;
+                console.log('[PRESENCE] 5 PM window — running pending purge');
+                await run5PMPurge();
+            }
+        } else {
+            if (h !== 17 || m > 1) _5pmFired = false;
+        }
+    }, 30_000);
+
+    // Immediate check (page loaded during the 5PM window)
+    (async () => {
+        const now = new Date();
+        if (now.getHours() === 17 && now.getMinutes() <= 1 && !_5pmFired) {
+            _5pmFired = true;
+            await run5PMPurge();
+        }
+    })();
+
+    console.log('[PRESENCE] 5 PM purge polling started');
+}
+
+async function run5PMPurge() {
+    const today = todayDate();
+    console.log(`[PRESENCE] run5PMPurge — purging unapproved pending for ${today}`);
+
+    try {
+        // ── Fetch all still-Pending rows for today ──
+        const { data: pendingRows, error: fetchErr } = await db
+            .from('attendance_pending')
+            .select('*')
+            .eq('date', today)
+            .eq('approval_status', 'Pending');
+
+        if (fetchErr) throw fetchErr;
+        if (!pendingRows || pendingRows.length === 0) {
+            console.log('[PRESENCE] 5PM purge: nothing to purge.');
+            return;
+        }
+
+        console.log(`[PRESENCE] 5PM purge: found ${pendingRows.length} unapproved pending rows`);
+
+        let removedCount = 0;
+        let noTimeOutCount = 0;
+
+        for (const p of pendingRows) {
+            if (p.scan_type === 'IN') {
+                // Time-in was never confirmed → check if a confirmed log exists anyway
+                const { data: logRow } = await db
+                    .from('attendance_logs')
+                    .select('id')
+                    .eq('lrn', p.lrn)
+                    .eq('date', today)
+                    .eq('person_type', p.person_type)
+                    .maybeSingle();
+
+                if (!logRow) {
+                    // No confirmed record → student never officially checked in
+                    // Nothing to remove from attendance_logs, just expire the pending
+                    removedCount++;
+                }
+                // If a confirmed log exists (shouldn't happen for pending IN, but guard)
+                // leave it alone
+
+            } else if (p.scan_type === 'OUT') {
+                // Time-out was never confirmed → mark the confirmed log as "No Time Out"
+                if (p.log_id) {
+                    const { error: updErr } = await db
+                        .from('attendance_logs')
+                        .update({ time_out: null, status: 'No Time Out' })
+                        .eq('id', p.log_id)
+                        .is('time_out', null); // only update if still no time_out
+                    if (!updErr) noTimeOutCount++;
+                }
+            }
+
+            // Mark the pending row as Expired
+            await db.from('attendance_pending')
+                .update({
+                    approval_status: 'Expired',
+                    expire_reason: 'Auto-expired at 5:00 PM — not approved before cutoff',
+                    reviewed_at: new Date().toISOString()
+                })
+                .eq('id', p.id);
+        }
+
+        const summary = [];
+        if (removedCount > 0) summary.push(`${removedCount} unapproved check-in(s) removed`);
+        if (noTimeOutCount > 0) summary.push(`${noTimeOutCount} marked No Time Out`);
+
+        const msg = summary.length > 0
+            ? `⏰ 5PM purge complete — ${summary.join(', ')}`
+            : `⏰ 5PM purge complete — ${pendingRows.length} pending row(s) expired`;
+
+        console.log('[PRESENCE]', msg);
+        showToast(msg);
+
+        // Refresh visible logs/pending if any role is logged in
+        if (currentUser) {
+            const role = currentUser.type;
+            if (role === 'secretary') { loadPendingQueue(); loadLogs('secretary'); }
+            if (role === 'adviser') loadLogs('adviser');
+            if (role === 'teacher') loadLogs('teacher');
+            if (role === 'admin') loadLogs('admin');
+        }
+
+    } catch (err) {
+        console.error('[PRESENCE] 5PM purge error:', err);
+    }
+}
+
+// ══════════════════════════════════════════════
+//  PHOTO AUTHENTICATION SYSTEM
+//  All non-student roles must take a verification
+//  photo before accessing their screen.
+// ══════════════════════════════════════════════
+let _photoAuthStream = null;
+let _photoAuthCallback = null;
+let _photoAuthCaptured = null;
+
+async function startPhotoAuth(onSuccess) {
+    _photoAuthCallback = onSuccess;
+    _photoAuthCaptured = null;
+
+    document.getElementById('photoAuthName').textContent = currentUser.name;
+    document.getElementById('photoAuthId').textContent = 'ID: ' + currentUser.id;
+    const roleLabels = { teacher: '👩‍🏫 TEACHER', admin: '🛡️ ADMIN', adviser: '🌟 ADVISER', secretary: '📋 SECRETARY' };
+    const badge = document.getElementById('photoAuthRoleBadge');
+    badge.textContent = roleLabels[currentUser.type] || currentUser.type.toUpperCase();
+    badge.className = `photo-auth-role-badge role-${currentUser.type}`;
+
+    document.getElementById('photoAuthPreview').classList.add('hidden');
+    document.getElementById('photoCaptureBtn').classList.remove('hidden');
+    document.getElementById('photoRetakeBtn').classList.add('hidden');
+    document.getElementById('photoConfirmBtn').classList.add('hidden');
+    document.getElementById('photoAuthMsg').style.display = 'none';
+
+    try {
+        const video = document.getElementById('photoAuthVideo');
+        video.style.display = 'block';
+        _photoAuthStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
+        video.srcObject = _photoAuthStream;
+        showScreen('photo-auth');
+    } catch (err) {
+        console.warn('[PRESENCE] Photo auth camera failed, bypassing:', err.message);
+        await stopPhotoAuthCamera();
+        onSuccess();
+    }
+}
+
+function captureAuthPhoto() {
+    const video = document.getElementById('photoAuthVideo');
+    const canvas = document.getElementById('photoAuthCanvas');
+    const img = document.getElementById('photoAuthImg');
+
+    canvas.width = video.videoWidth || 320;
+    canvas.height = video.videoHeight || 240;
+    canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+    _photoAuthCaptured = canvas.toDataURL('image/jpeg', 0.85);
+    img.src = _photoAuthCaptured;
+
+    video.style.display = 'none';
+    document.getElementById('photoAuthPreview').classList.remove('hidden');
+    document.getElementById('photoCaptureBtn').classList.add('hidden');
+    document.getElementById('photoRetakeBtn').classList.remove('hidden');
+    document.getElementById('photoConfirmBtn').classList.remove('hidden');
+
+    setStatus('photoAuthMsg', 'success', 'PHOTO CAPTURED', 'Confirm to proceed or retake if unclear.');
+    document.getElementById('photoAuthMsg').style.display = 'flex';
+}
+
+function retakeAuthPhoto() {
+    const video = document.getElementById('photoAuthVideo');
+    _photoAuthCaptured = null;
+    video.style.display = 'block';
+    document.getElementById('photoAuthPreview').classList.add('hidden');
+    document.getElementById('photoCaptureBtn').classList.remove('hidden');
+    document.getElementById('photoRetakeBtn').classList.add('hidden');
+    document.getElementById('photoConfirmBtn').classList.add('hidden');
+    document.getElementById('photoAuthMsg').style.display = 'none';
+}
+
+async function confirmAuthPhoto() {
+    if (!_photoAuthCaptured) return;
+    const btn = document.getElementById('photoConfirmBtn');
+    btn.disabled = true; btn.textContent = '⏳ SAVING...';
+
+    try {
+        await db.from('photo_auth_logs').insert({
+            user_id: currentUser.id,
+            user_name: currentUser.name,
+            role: currentUser.type,
+            photo_data: _photoAuthCaptured,
+            logged_at: new Date().toISOString()
+        });
+    } catch (_) {
+        console.warn('[PRESENCE] photo_auth_logs insert skipped (table may not exist)');
+    }
+
+    await stopPhotoAuthCamera();
+    showToast(`✓ ${currentUser.name} verified`);
+    btn.disabled = false; btn.textContent = '✅ CONFIRM & CONTINUE';
+    if (_photoAuthCallback) _photoAuthCallback();
+}
+
+async function cancelPhotoAuth() {
+    await stopPhotoAuthCamera();
+    currentUser = null; _photoAuthCallback = null; _photoAuthCaptured = null;
+    resetLoginBtn();
+    showScreen('login');
+}
+
+async function stopPhotoAuthCamera() {
+    if (_photoAuthStream) { _photoAuthStream.getTracks().forEach(t => t.stop()); _photoAuthStream = null; }
+    const video = document.getElementById('photoAuthVideo');
+    if (video) video.srcObject = null;
+}
+
+// ══════════════════════════════════════════════
+//  ADVISER ROLE — Full access + multi-scan
+// ══════════════════════════════════════════════
+let adviserScanMode = 'IN';
+
+function setAdviserScanMode(mode) {
+    adviserScanMode = mode;
+    document.getElementById('advModeIn').classList.toggle('active', mode === 'IN');
+    document.getElementById('advModeOut').classList.toggle('active', mode === 'OUT');
+}
+
+async function startAdviserScanner() {
+    await startQrScanner('adviser-reader', onAdviserScan);
+}
+
+async function onAdviserScan(qrData) {
+    if (scanLock) return;
+    scanLock = true;
+    const parts = qrData.trim().split('|');
+    const type = parts[0]?.trim().toUpperCase();
+    if (type !== 'STUDENT' && type !== 'TEACHER') { scanLock = false; return; }
+    const [_, id, name, sec] = parts;
+    const personType = type.toLowerCase();
+    setStatus('adviserScanStatus', 'info', 'PROCESSING...', 'Please wait');
+    await recordAttendance(personType, id.trim(), name ? name.trim() : id.trim(), 'adviserScanStatus', sec?.trim() || null);
+    setTimeout(() => { scanLock = false; }, 2000);
+}
+
+async function onAdviserTabChange(tabId) {
+    if (tabId === 'advScanTab') await startAdviserScanner();
+    if (tabId === 'advLogsTab') loadLogs('adviser');
+    if (tabId === 'advStatsTab') loadAdviserStats();
+    if (tabId === 'advSuspendTab') loadAdviserSuspendTab();
+    if (tabId === 'advTimeTab') loadAdviserOwnTime();
+}
+
+async function loadAdviserStats() {
+    const today = todayDate();
+    const el = document.getElementById('advStatsDisplay');
+    if (!el) return;
+    el.innerHTML = '<div style="padding:20px;color:#888;font-size:13px;">Loading stats...</div>';
+
+    const [stuToday, tchToday, stuLate, n1, n2, p1, p2] = await Promise.all([
+        db.from('attendance_logs').select('id', { count: 'exact' }).eq('date', today).eq('person_type', 'student'),
+        db.from('attendance_logs').select('id', { count: 'exact' }).eq('date', today).eq('person_type', 'teacher'),
+        db.from('attendance_logs').select('id', { count: 'exact' }).eq('date', today).eq('person_type', 'student').eq('status', 'Late'),
+        db.from('attendance_logs').select('id', { count: 'exact' }).eq('date', today).eq('section', '12-Newton'),
+        db.from('attendance_logs').select('id', { count: 'exact' }).eq('date', today).eq('section', '12-Newton').eq('status', 'On Time'),
+        db.from('attendance_logs').select('id', { count: 'exact' }).eq('date', today).eq('section', '12-Pythagoras'),
+        db.from('attendance_logs').select('id', { count: 'exact' }).eq('date', today).eq('section', '12-Pythagoras').eq('status', 'On Time'),
+    ]);
+
+    el.innerHTML = `
+        <div class="stat-card highlight"><div class="stat-label">Students Present Today</div><div class="stat-value">${stuToday.count ?? 0}</div></div>
+        <div class="stat-card highlight"><div class="stat-label">Teachers Present Today</div><div class="stat-value">${tchToday.count ?? 0}</div></div>
+        <div class="stat-card warn"><div class="stat-label">Late Today</div><div class="stat-value">${stuLate.count ?? 0}</div></div>
+        <div class="stat-card" style="border-left:4px solid #2563eb;">
+            <div class="stat-label">12-Newton Present</div>
+            <div class="stat-value">${n1.count ?? 0}<span style="font-size:12px;opacity:0.5"> / 39</span></div>
+            <div class="stat-sub">${n2.count ?? 0} on time</div>
+        </div>
+        <div class="stat-card" style="border-left:4px solid #7c3aed;">
+            <div class="stat-label">12-Pythagoras Present</div>
+            <div class="stat-value">${p1.count ?? 0}<span style="font-size:12px;opacity:0.5"> / 42</span></div>
+            <div class="stat-sub">${p2.count ?? 0} on time</div>
+        </div>
+    `;
+}
+
+let _advSelectedChipReason = '';
+
+function selectReasonChipAdv(el, reason) {
+    document.querySelectorAll('#advSuspendReasonChips .reason-chip').forEach(c => c.classList.remove('selected'));
+    el.classList.add('selected');
+    _advSelectedChipReason = reason;
+    if (reason !== 'Other') { const ta = document.getElementById('advSuspendReasonText'); if (ta && !ta.value) ta.value = reason; }
+}
+
+async function loadAdviserSuspendTab() {
+    const state = await getSuspensionState();
+    renderAdviserSuspendUI(state);
+}
+
+function renderAdviserSuspendUI(state) {
+    const banner = document.getElementById('advSuspendStatusBanner');
+    const suspendCard = document.getElementById('advSuspendCard');
+    const resumeCard = document.getElementById('advResumeCard');
+    const tabBtn = document.getElementById('advSuspendTabBtn');
+
+    if (state.suspended) {
+        banner.textContent = '⚠️ ATTENDANCE IS CURRENTLY SUSPENDED';
+        banner.classList.remove('hidden');
+        suspendCard.style.display = 'none';
+        resumeCard.classList.remove('hidden');
+        document.getElementById('advResumeActiveReason').innerHTML =
+            `<strong style="font-size:10px;letter-spacing:2px;opacity:0.6">ACTIVE REASON:</strong><br>${state.reason || 'No reason given'}` +
+            (state.by ? `<span style="display:block;font-size:10px;margin-top:4px;opacity:0.55">— Suspended by ${state.by}</span>` : '');
+        tabBtn?.classList.add('suspended-active');
+    } else {
+        banner.classList.add('hidden');
+        suspendCard.style.display = 'flex';
+        resumeCard.classList.add('hidden');
+        tabBtn?.classList.remove('suspended-active');
+    }
+    document.getElementById('advSuspendMsg').style.display = 'none';
+}
+
+async function adviserSuspend() {
+    const chipReason = _advSelectedChipReason;
+    const textReason = document.getElementById('advSuspendReasonText')?.value?.trim();
+    const reason = textReason || chipReason || 'No reason provided';
+    if (!chipReason && !textReason) {
+        setStatus('advSuspendMsg', 'warning', 'REASON REQUIRED', 'Please select or type a reason.');
+        document.getElementById('advSuspendMsg').style.display = 'flex'; return;
+    }
+    const btn = document.getElementById('advBtnSuspend');
+    btn.disabled = true; btn.textContent = '⏳ SUSPENDING...';
+    await setSuspensionState(true, reason, currentUser?.name || 'Adviser');
+    showToast('⚠️ Attendance suspended');
+    renderAdviserSuspendUI({ suspended: true, reason, by: currentUser?.name || 'Adviser' });
+    btn.disabled = false; btn.innerHTML = '<span>🚫</span> SUSPEND ATTENDANCE';
+}
+
+async function adviserResume() {
+    await setSuspensionState(false, '', '');
+    showToast('✅ Attendance re-enabled');
+    renderAdviserSuspendUI({ suspended: false, reason: '', by: '' });
+    document.querySelectorAll('#advSuspendReasonChips .reason-chip').forEach(c => c.classList.remove('selected'));
+    _advSelectedChipReason = '';
+    const ta = document.getElementById('advSuspendReasonText'); if (ta) ta.value = '';
+}
+
+async function loadAdviserOwnTime() {
+    if (!currentUser) return;
+    const today = todayDate();
+    const { data } = await db.from('attendance_logs')
+        .select('*').eq('lrn', currentUser.id).eq('date', today).eq('person_type', 'teacher').maybeSingle();
+    document.getElementById('advTimeIn').textContent = data?.time_in || '—';
+    document.getElementById('advTimeOut').textContent = data?.time_out || '—';
+    document.getElementById('advStatus').textContent = data?.status || '—';
+}
+
+async function adviserSelfTimeIn() {
+    if (!currentUser) return;
+    const today = todayDate();
+    const { data: existing } = await db.from('attendance_logs')
+        .select('*').eq('lrn', currentUser.id).eq('date', today).eq('person_type', 'teacher').maybeSingle();
+    const msgEl = document.getElementById('advTimeMsg');
+    if (existing) { setStatus('advTimeMsg', 'warning', 'ALREADY TIMED IN', `Checked in at ${existing.time_in}`); msgEl.style.display = 'flex'; return; }
+    const time = nowTime(); const status = getAttendanceStatus();
+    const { error } = await db.from('attendance_logs').insert({ lrn: currentUser.id, full_name: currentUser.name, date: today, time_in: time, status, person_type: 'teacher' });
+    if (error) { setStatus('advTimeMsg', 'error', 'ERROR', error.message); msgEl.style.display = 'flex'; return; }
+    setStatus('advTimeMsg', 'success', `TIME IN — ${status}`, `Recorded at ${time}`);
+    msgEl.style.display = 'flex'; loadAdviserOwnTime(); showToast(`Time In recorded at ${time}`);
+}
+
+async function adviserSelfTimeOut() {
+    if (!currentUser) return;
+    const today = todayDate();
+    const { data: existing } = await db.from('attendance_logs')
+        .select('*').eq('lrn', currentUser.id).eq('date', today).eq('person_type', 'teacher').maybeSingle();
+    const msgEl = document.getElementById('advTimeMsg');
+    if (!existing) { setStatus('advTimeMsg', 'error', 'NO TIME IN RECORD', 'Please time in first.'); msgEl.style.display = 'flex'; return; }
+    if (existing.time_out) { setStatus('advTimeMsg', 'warning', 'ALREADY TIMED OUT', `You left at ${existing.time_out}`); msgEl.style.display = 'flex'; return; }
+    const time = nowTime();
+    const { error } = await db.from('attendance_logs').update({ time_out: time }).eq('id', existing.id);
+    if (error) { setStatus('advTimeMsg', 'error', 'ERROR', error.message); msgEl.style.display = 'flex'; return; }
+    setStatus('advTimeMsg', 'success', 'TIME OUT RECORDED', `Recorded at ${time}`);
+    msgEl.style.display = 'flex'; loadAdviserOwnTime(); showToast(`Time Out recorded at ${time}`);
+}
+
+// ══════════════════════════════════════════════
+//  SECRETARY ROLE — Logsheets only
+// ══════════════════════════════════════════════
+async function onSecretaryTabChange(tabId) {
+    stopPendingAutoRefresh();
+    if (tabId === 'secLogsTab') loadLogs('secretary');
+    if (tabId === 'secPendingTab') startPendingAutoRefresh();
+}
+
+// ── PENDING APPROVAL QUEUE ────────────────────
+// Live-refreshing queue of all pending scans.
+// Secretary confirms → original scanned time goes to attendance_logs unchanged.
+let _pendingInterval = null;
+
+async function loadPendingQueue() {
+    const el = document.getElementById('pendingQueueDisplay');
+    if (!el) return;
+
+    const today = todayDate();
+    const { data, error } = await db.from('attendance_pending')
+        .select('*')
+        .eq('date', today)
+        .eq('approval_status', 'Pending')
+        .order('created_at', { ascending: true });
+
+    // Badge on tab
+    const badge = document.getElementById('pendingTabBadge');
+    const count = data?.length ?? 0;
+    if (badge) {
+        badge.textContent = count > 0 ? count : '';
+        badge.style.display = count > 0 ? 'inline-flex' : 'none';
+    }
+
+    if (error) { el.innerHTML = `<div class="logs-empty">Error: ${error.message}</div>`; return; }
+    if (!count) {
+        el.innerHTML = `
+            <div class="pending-empty">
+                <div class="pending-empty-icon">✅</div>
+                <div class="pending-empty-title">ALL CLEAR</div>
+                <p>No pending scans to approve right now.</p>
+            </div>`;
+        return;
+    }
+
+    el.innerHTML = data.map(p => {
+        const isIn = p.scan_type === 'IN';
+        const scannedTime = isIn ? p.scanned_time_in : p.scanned_time_out;
+        const statusClass = p.computed_status === 'On Time' ? 'ontime' : p.computed_status === 'Late' ? 'late' : 'halfday';
+        return `
+        <div class="pending-item" id="pending-row-${p.id}">
+            <div class="pending-item-left">
+                <div class="pending-scan-type ${isIn ? 'type-in' : 'type-out'}">${isIn ? '⏰ TIME IN' : '🚶 TIME OUT'}</div>
+                <div class="pending-name">${p.full_name}</div>
+                <div class="pending-meta">
+                    <span class="pending-lrn">ID: ${p.lrn}</span>
+                    ${p.section ? `<span class="log-section-tag">${p.section}</span>` : ''}
+                </div>
+                <div class="pending-time-row">
+                    <span class="pending-time-label">SCANNED AT</span>
+                    <span class="pending-time-value">${scannedTime}</span>
+                    <span class="log-status ${statusClass}" style="margin-left:8px;">${p.computed_status}</span>
+                </div>
+            </div>
+            <div class="pending-item-actions">
+                <button class="pending-btn-confirm" onclick="confirmPending('${p.id}')">
+                    ✓ CONFIRM
+                </button>
+                <button class="pending-btn-reject" onclick="rejectPending('${p.id}')">
+                    ✕
+                </button>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+async function confirmPending(pendingId) {
+    const row = document.getElementById(`pending-row-${pendingId}`);
+    if (row) {
+        row.style.opacity = '0.5';
+        row.style.pointerEvents = 'none';
+        row.querySelector('.pending-btn-confirm').textContent = '⏳ CONFIRMING...';
+    }
+
+    try {
+        // Fetch the pending record
+        const { data: p, error: fetchErr } = await db.from('attendance_pending')
+            .select('*').eq('id', pendingId).maybeSingle();
+        if (fetchErr) throw fetchErr;
+        if (!p) throw new Error('Pending record not found');
+
+        if (p.scan_type === 'IN') {
+            // Check if already confirmed (race condition guard)
+            const { data: alreadyIn } = await db.from('attendance_logs')
+                .select('id').eq('lrn', p.lrn).eq('date', p.date).eq('person_type', p.person_type).maybeSingle();
+            if (alreadyIn) throw new Error(`${p.full_name} already has a confirmed time-in`);
+
+            // Insert to attendance_logs using the ORIGINAL scanned time
+            const { error: insErr } = await db.from('attendance_logs').insert({
+                lrn: p.lrn,
+                full_name: p.full_name,
+                date: p.date,
+                time_in: p.scanned_time_in,   // ← original scanned time, unchanged
+                status: p.computed_status,
+                person_type: p.person_type,
+                section: p.section || null
+            });
+            if (insErr) throw insErr;
+
+        } else if (p.scan_type === 'OUT') {
+            // Update the confirmed log record
+            const logId = p.log_id;
+            if (!logId) throw new Error('No linked log ID for time-out confirmation');
+
+            const { error: updErr } = await db.from('attendance_logs')
+                .update({
+                    time_out: p.scanned_time_out,   // ← original scanned time, unchanged
+                    status: p.computed_status
+                })
+                .eq('id', logId);
+            if (updErr) throw updErr;
+        }
+
+        // Mark pending as confirmed
+        await db.from('attendance_pending')
+            .update({ approval_status: 'Confirmed', reviewed_by: currentUser?.name || 'Secretary', reviewed_at: new Date().toISOString() })
+            .eq('id', pendingId);
+
+        flashSuccess();
+        showToast(`✓ ${p.full_name} — ${p.scan_type === 'IN' ? p.scanned_time_in : p.scanned_time_out} confirmed`);
+
+        // Remove row with animation
+        if (row) {
+            row.style.transition = 'all 0.3s ease';
+            row.style.transform = 'translateX(100%)';
+            row.style.opacity = '0';
+            setTimeout(() => { row.remove(); loadPendingQueue(); }, 320);
+        } else {
+            loadPendingQueue();
+        }
+
+    } catch (err) {
+        showToast(`Error: ${err.message}`);
+        if (row) { row.style.opacity = '1'; row.style.pointerEvents = ''; }
+        console.error(err);
+    }
+}
+
+async function rejectPending(pendingId) {
+    const { data: p } = await db.from('attendance_pending').select('*').eq('id', pendingId).maybeSingle();
+    if (!p) return;
+
+    const confirmed = confirm(`Reject ${p.full_name}'s scan at ${p.scanned_time_in || p.scanned_time_out}?\n\nThis will delete the pending entry and the student will need to scan again.`);
+    if (!confirmed) return;
+
+    await db.from('attendance_pending')
+        .update({ approval_status: 'Rejected', reviewed_by: currentUser?.name || 'Secretary', reviewed_at: new Date().toISOString() })
+        .eq('id', pendingId);
+
+    showToast(`✕ ${p.full_name} scan rejected`);
+    loadPendingQueue();
+}
+
+// Auto-refresh pending queue every 15s when secretary is on that tab
+function startPendingAutoRefresh() {
+    stopPendingAutoRefresh();
+    loadPendingQueue();
+    _pendingInterval = setInterval(loadPendingQueue, 15000);
+}
+
+function stopPendingAutoRefresh() {
+    if (_pendingInterval) { clearInterval(_pendingInterval); _pendingInterval = null; }
+}
+
+async function exportCSVRole(role) {
+    const dateId = role === 'secretary' ? 'secDateFilter' : 'advDateFilter';
+    const typeId = role === 'secretary' ? 'secTypeFilter' : 'advTypeFilter';
+    const sectionId = role === 'secretary' ? 'secSectionFilter' : 'advSectionFilter';
+    const date = document.getElementById(dateId)?.value || todayDate();
+    const type = document.getElementById(typeId)?.value || 'student';
+    const section = document.getElementById(sectionId)?.value || 'all';
+
+    let query = db.from('attendance_logs').select('*').eq('date', date).eq('person_type', type).order('time_in', { ascending: true });
+    if (section !== 'all') query = query.eq('section', section);
+    const { data, error } = await query;
+    if (error || !data?.length) { showToast('No data to export.'); return; }
+
+    const headers = ['LRN/ID', 'Full Name', 'Section', 'Date', 'Time In', 'Time Out', 'Status', 'Type'];
+    const rows = data.map(r => [r.lrn, r.full_name, r.section || '—', r.date, r.time_in, r.time_out || '', r.status, r.person_type]);
+    const csv = [headers, ...rows].map(r => r.map(v => `"${v}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = `logsheet_${date}_${section}.csv`;
+    a.click(); URL.revokeObjectURL(url);
+    showToast('CSV exported!');
+}
+
+async function secretaryDownload() {
+    const statusEl = document.getElementById('secExportStatus');
+    const dateFrom = document.getElementById('secDateFrom')?.value || todayDate();
+    const dateTo = document.getElementById('secDateTo')?.value || todayDate();
+    const section = document.getElementById('secExportSection')?.value || 'all';
+
+    statusEl.className = 'status-box info';
+    statusEl.innerHTML = '<span class="status-dot"></span><div><strong>PREPARING...</strong><p>Fetching records...</p></div>';
+    statusEl.style.display = 'flex';
+
+    try {
+        let query = db.from('attendance_logs').select('*').gte('date', dateFrom).lte('date', dateTo)
+            .order('date', { ascending: true }).order('time_in', { ascending: true });
+        if (section !== 'all') query = query.eq('section', section);
+        const { data, error } = await query;
+        if (error) throw error;
+        if (!data?.length) { setStatus('secExportStatus', 'warning', 'NO DATA', 'No records found.'); return; }
+        const wb = buildWorkbook(data, dateFrom, dateTo);
+        const wbArray = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+        const blob = new Blob([wbArray], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        const fileName = `logsheet_${dateFrom}_to_${dateTo}_${section}.xlsx`;
+        triggerDownload(blob, fileName);
+        setStatus('secExportStatus', 'success', 'DOWNLOADED ✓', `${data.length} records saved as ${fileName}`);
+    } catch (err) {
+        setStatus('secExportStatus', 'error', 'ERROR', err.message);
+    }
+}
+
+// ── UPDATED loadStats — includes section breakdown
+async function loadStats() {
+    const today = todayDate();
+    const el = document.getElementById('statsDisplay');
+    if (!el) return;
+    el.innerHTML = '<div style="padding:20px;color:#888;font-size:13px;">Loading stats...</div>';
+
+    const [stuToday, tchToday, stuLate, stuHalf, stuNoOut, stuAll, n1, p1] = await Promise.all([
+        db.from('attendance_logs').select('id', { count: 'exact' }).eq('date', today).eq('person_type', 'student'),
+        db.from('attendance_logs').select('id', { count: 'exact' }).eq('date', today).eq('person_type', 'teacher'),
+        db.from('attendance_logs').select('id', { count: 'exact' }).eq('date', today).eq('person_type', 'student').eq('status', 'Late'),
+        db.from('attendance_logs').select('id', { count: 'exact' }).eq('date', today).eq('person_type', 'student').eq('status', 'Half Day'),
+        db.from('attendance_logs').select('id', { count: 'exact' }).eq('date', today).eq('person_type', 'student').is('time_out', null),
+        db.from('attendance_logs').select('id', { count: 'exact' }).eq('person_type', 'student'),
+        db.from('attendance_logs').select('id', { count: 'exact' }).eq('date', today).eq('section', '12-Newton'),
+        db.from('attendance_logs').select('id', { count: 'exact' }).eq('date', today).eq('section', '12-Pythagoras'),
+    ]);
+
+    el.innerHTML = `
+        <div class="stat-card highlight"><div class="stat-label">Students Present Today</div><div class="stat-value">${stuToday.count ?? 0}</div></div>
+        <div class="stat-card highlight"><div class="stat-label">Teachers Present Today</div><div class="stat-value">${tchToday.count ?? 0}</div></div>
+        <div class="stat-card warn"><div class="stat-label">Late Today</div><div class="stat-value">${stuLate.count ?? 0}</div></div>
+        <div class="stat-card warn"><div class="stat-label">Half Day Today</div><div class="stat-value">${stuHalf.count ?? 0}</div></div>
+        <div class="stat-card warn"><div class="stat-label">No Time Out Yet</div><div class="stat-value">${stuNoOut.count ?? 0}</div><div class="stat-sub">Still inside campus</div></div>
+        <div class="stat-card"><div class="stat-label">Total Records (All Time)</div><div class="stat-value">${stuAll.count ?? 0}</div></div>
+        <div class="stat-card" style="border-left:4px solid #2563eb;">
+            <div class="stat-label">12-Newton Today</div>
+            <div class="stat-value">${n1.count ?? 0}<span style="font-size:12px;opacity:0.5"> / 39</span></div>
+        </div>
+        <div class="stat-card" style="border-left:4px solid #7c3aed;">
+            <div class="stat-label">12-Pythagoras Today</div>
+            <div class="stat-value">${p1.count ?? 0}<span style="font-size:12px;opacity:0.5"> / 42</span></div>
+        </div>
+    `;
+}
+
+
+// ══════════════════════════════════════════════
+//  STUDENT PHOTO MODAL (spm)
+//  Triggered for ALL members before TIME IN/OUT.
+//  Photo is saved to Supabase and shown in logs
+//  for Adviser and Secretary.
+// ══════════════════════════════════════════════
+let _spmStream = null;
+let _spmCaptured = null;  // base64 jpeg
+let _spmMode = null;      // 'IN' or 'OUT'
+let _spmResolve = null;   // promise resolver
+
+// Opens the photo modal; returns a Promise that resolves to
+// the captured base64 string, or null if cancelled.
+function openStudentPhotoModal(mode) {
+    return new Promise(async (resolve) => {
+        _spmMode = mode;
+        _spmResolve = resolve;
+        _spmCaptured = null;
+
+        // Update titles
+        const isIn = mode === 'IN';
+        document.getElementById('spmTitle').textContent = isIn ? '📸 TIME IN — PHOTO' : '📸 TIME OUT — PHOTO';
+        document.getElementById('spmSub').textContent = isIn
+            ? 'Take a photo to record your Time In'
+            : 'Take a photo to record your Time Out';
+
+        // Reset UI state
+        const video = document.getElementById('spmVideo');
+        const canvas = document.getElementById('spmCanvas');
+        video.style.display = 'block';
+        canvas.style.display = 'none';
+        document.getElementById('spmPreview').classList.add('hidden');
+        document.getElementById('spmCaptureBtn').classList.remove('hidden');
+        document.getElementById('spmRetakeBtn').classList.add('hidden');
+        document.getElementById('spmConfirmBtn').classList.add('hidden');
+
+        // Show modal
+        document.getElementById('studentPhotoModal').classList.remove('hidden');
+
+        // Start camera (prefer front/selfie camera for members)
+        try {
+            _spmStream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: { ideal: 'user' } },
+                audio: false
+            });
+            video.srcObject = _spmStream;
+        } catch (err) {
+            console.warn('[spm] Camera error, bypassing photo:', err.message);
+            _spmStopCamera();
+            document.getElementById('studentPhotoModal').classList.add('hidden');
+            resolve(null); // bypass photo if camera unavailable
+        }
+    });
+}
+
+function spmCapture() {
+    const video = document.getElementById('spmVideo');
+    const canvas = document.getElementById('spmCanvas');
+    const img = document.getElementById('spmImg');
+
+    canvas.width = video.videoWidth || 320;
+    canvas.height = video.videoHeight || 240;
+    // Draw mirrored (front camera is already mirrored via CSS, draw normal for storage)
+    const ctx = canvas.getContext('2d');
+    ctx.save();
+    ctx.scale(-1, 1);
+    ctx.drawImage(video, -canvas.width, 0, canvas.width, canvas.height);
+    ctx.restore();
+
+    _spmCaptured = canvas.toDataURL('image/jpeg', 0.80);
+    img.src = _spmCaptured;
+
+    video.style.display = 'none';
+    document.getElementById('spmPreview').classList.remove('hidden');
+    document.getElementById('spmCaptureBtn').classList.add('hidden');
+    document.getElementById('spmRetakeBtn').classList.remove('hidden');
+    document.getElementById('spmConfirmBtn').classList.remove('hidden');
+}
+
+function spmRetake() {
+    const video = document.getElementById('spmVideo');
+    _spmCaptured = null;
+    video.style.display = 'block';
+    document.getElementById('spmPreview').classList.add('hidden');
+    document.getElementById('spmCaptureBtn').classList.remove('hidden');
+    document.getElementById('spmRetakeBtn').classList.add('hidden');
+    document.getElementById('spmConfirmBtn').classList.add('hidden');
+}
+
+async function spmConfirm() {
+    if (!_spmCaptured) return;
+    const btn = document.getElementById('spmConfirmBtn');
+    btn.disabled = true;
+    btn.textContent = '⏳ SAVING...';
+    _spmStopCamera();
+    document.getElementById('studentPhotoModal').classList.add('hidden');
+    btn.disabled = false;
+    btn.textContent = '✅ CONFIRM';
+    if (_spmResolve) { _spmResolve(_spmCaptured); _spmResolve = null; }
+}
+
+function spmCancel() {
+    _spmStopCamera();
+    document.getElementById('studentPhotoModal').classList.add('hidden');
+    if (_spmResolve) { _spmResolve(null); _spmResolve = null; }
+}
+
+function _spmStopCamera() {
+    if (_spmStream) { _spmStream.getTracks().forEach(t => t.stop()); _spmStream = null; }
+    const video = document.getElementById('spmVideo');
+    if (video) video.srcObject = null;
+}
+
+// ── Patch studentAction to require photo ──────
+// Override the original studentAction to capture photo first
+const _origStudentAction = studentAction;
+window.studentAction = async function(mode) {
+    // Capture photo first
+    const photo = await openStudentPhotoModal(mode);
+    // Even if photo is null (camera failed), still allow action to proceed
+    await _recordStudentActionWithPhoto(mode, photo);
+};
+
+async function _recordStudentActionWithPhoto(mode, photoData) {
+    const id = currentUser.id;
+    const name = currentUser.name;
+    const btnIn = document.getElementById('actionBtnIn');
+    const btnOut = document.getElementById('actionBtnOut');
+    const msgEl = document.getElementById('actionMsg');
+
+    btnIn.disabled = true;
+    btnOut.disabled = true;
+    msgEl.style.display = 'none';
+
+    await recordAttendanceWithPhoto('student', id, name, mode, 'actionMsg', photoData, currentUser.section);
+    msgEl.style.display = 'flex';
+
+    // Refresh state
+    const today = todayDate();
+    const { data: updated } = await db.from('attendance_logs')
+        .select('*').eq('lrn', id).eq('date', today).eq('person_type', 'student').maybeSingle();
+    const { data: updPendingIn } = await db.from('attendance_pending')
+        .select('*').eq('lrn', id).eq('date', today).eq('person_type', 'student')
+        .eq('scan_type', 'IN').eq('approval_status', 'Pending').maybeSingle();
+    const { data: updPendingOut } = await db.from('attendance_pending')
+        .select('*').eq('lrn', id).eq('date', today).eq('person_type', 'student')
+        .eq('scan_type', 'OUT').eq('approval_status', 'Pending').maybeSingle();
+
+    const recEl = document.getElementById('actionTodayRecord');
+    const notice = document.getElementById('actionPendingNotice');
+    btnIn.classList.remove('action-btn-done', 'action-btn-pending');
+    btnOut.classList.remove('action-btn-done', 'action-btn-pending');
+    notice?.classList.add('hidden');
+
+    if (updated) {
+        let outText = updated.time_out || '---';
+        if (!updated.time_out && updPendingOut) {
+            outText = `${updPendingOut.scanned_time_out} ⏳ PENDING`;
+            btnOut.classList.add('action-btn-pending'); btnOut.disabled = true;
+            notice?.classList.remove('hidden');
+        } else if (updated.time_out) {
+            btnOut.classList.add('action-btn-done'); btnOut.disabled = true;
+        }
+        document.getElementById('actionTodayIn').textContent = (updated.time_in || '---') + ' (' + updated.status + ')';
+        document.getElementById('actionTodayOut').textContent = outText;
+        recEl.classList.remove('hidden');
+        btnIn.classList.add('action-btn-done'); btnIn.disabled = true;
+    } else if (updPendingIn) {
+        document.getElementById('actionTodayIn').textContent = `${updPendingIn.scanned_time_in} ⏳ PENDING`;
+        document.getElementById('actionTodayOut').textContent = '---';
+        recEl.classList.remove('hidden');
+        btnIn.classList.add('action-btn-pending'); btnIn.disabled = true;
+        btnOut.disabled = true;
+        notice?.classList.remove('hidden');
+    }
+
+    setTimeout(() => goBackToScan(), 3500);
+}
+
+// ── recordAttendance extended with photo ─────
+// Wraps the original recordAttendance and saves photo to attendance_pending
+async function recordAttendanceWithPhoto(personType, lrn, name, mode, statusElId, photoData, section = null) {
+    const result = await recordAttendance(personType, lrn, name, mode, statusElId, section);
+
+    // If attendance was recorded (result is true) and we have a photo, save it
+    if (result && photoData) {
+        try {
+            // Get the newly created pending row to attach photo
+            const today = todayDate();
+            const { data: pendingRow } = await db.from('attendance_pending')
+                .select('id')
+                .eq('lrn', lrn)
+                .eq('date', today)
+                .eq('person_type', personType)
+                .eq('scan_type', mode)
+                .eq('approval_status', 'Pending')
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+
+            if (pendingRow) {
+                await db.from('attendance_pending')
+                    .update({ photo_data: photoData })
+                    .eq('id', pendingRow.id);
+            }
+        } catch (e) {
+            console.warn('[spm] Could not save photo to pending:', e.message);
+        }
+    }
+
+    return result;
+}
+
+// ── Show photo thumbnail & lightbox in logs ───
+function showPhotoLightbox(photoData, name, time, scanType) {
+    const lb = document.createElement('div');
+    lb.className = 'photo-lightbox';
+    lb.innerHTML = `
+        <img src="${photoData}" alt="Photo of ${name}" />
+        <div class="photo-lightbox-info">
+            <strong>${name}</strong>
+            ${scanType === 'IN' ? '⏰ Time In' : '🚶 Time Out'} — ${time}
+        </div>
+        <div class="photo-lightbox-close">TAP ANYWHERE TO CLOSE</div>
+    `;
+    lb.onclick = () => lb.remove();
+    document.body.appendChild(lb);
+}
+
+// ── Patch loadLogs to show photos for adviser/secretary ──
+const _origLoadLogs = loadLogs;
+window.loadLogs = async function(role) {
+    // Call original first to render the base list
+    await _origLoadLogs(role);
+
+    // Only adviser and secretary see photos
+    if (role !== 'adviser' && role !== 'secretary') return;
+
+    const dispId = role === 'secretary' ? 'secLogsDisplay' : 'advLogsDisplay';
+    const dateId = role === 'secretary' ? 'secDateFilter' : 'advDateFilter';
+    const typeId = role === 'secretary' ? 'secTypeFilter' : 'advTypeFilter';
+    const sectionId = role === 'secretary' ? 'secSectionFilter' : 'advSectionFilter';
+
+    const date = document.getElementById(dateId)?.value || todayDate();
+    const type = document.getElementById(typeId)?.value || 'student';
+    const section = document.getElementById(sectionId)?.value || 'all';
+    const display = document.getElementById(dispId);
+    if (!display) return;
+
+    // Fetch pending rows for today (which have photo_data)
+    let pendingQuery = db.from('attendance_pending')
+        .select('lrn, scan_type, photo_data, scanned_time_in, scanned_time_out, full_name')
+        .eq('date', date)
+        .eq('person_type', type)
+        .not('photo_data', 'is', null);
+
+    const { data: photoRows } = await pendingQuery;
+    if (!photoRows?.length) return;
+
+    // Also check attendance_logs for confirmed rows (photo saved in pending)
+    // Build a map: lrn+scanType → { photo, time, name }
+    const photoMap = {};
+    photoRows.forEach(r => {
+        const key = `${r.lrn}_${r.scan_type}`;
+        photoMap[key] = {
+            photo: r.photo_data,
+            time: r.scan_type === 'IN' ? r.scanned_time_in : r.scanned_time_out,
+            name: r.full_name,
+            scanType: r.scan_type
+        };
+    });
+
+    // Find all log-items in the display and inject photo thumbnails
+    display.querySelectorAll('.log-item').forEach(row => {
+        const idText = row.querySelector('.log-meta')?.textContent || '';
+        const lrnMatch = idText.match(/ID:\s*([^\s|]+)/);
+        if (!lrnMatch) return;
+        const lrn = lrnMatch[1].trim();
+
+        // Check for Time In photo
+        const inKey = `${lrn}_IN`;
+        const outKey = `${lrn}_OUT`;
+        const rightDiv = row.querySelector('div:last-child');
+        if (!rightDiv) return;
+
+        // Avoid double-injecting
+        if (row.querySelector('.log-photo-thumb')) return;
+
+        if (photoMap[inKey]) {
+            const p = photoMap[inKey];
+            const thumb = document.createElement('img');
+            thumb.className = 'log-photo-thumb';
+            thumb.src = p.photo;
+            thumb.title = `📸 Time In photo — ${p.name}`;
+            thumb.onclick = (e) => { e.stopPropagation(); showPhotoLightbox(p.photo, p.name, p.time, 'IN'); };
+            rightDiv.insertBefore(thumb, rightDiv.firstChild);
+        }
+        if (photoMap[outKey]) {
+            const p = photoMap[outKey];
+            const thumb = document.createElement('img');
+            thumb.className = 'log-photo-thumb';
+            thumb.src = p.photo;
+            thumb.title = `📸 Time Out photo — ${p.name}`;
+            thumb.onclick = (e) => { e.stopPropagation(); showPhotoLightbox(p.photo, p.name, p.time, 'OUT'); };
+            rightDiv.insertBefore(thumb, rightDiv.firstChild);
+        }
+    });
+};
+
+// ── Also show photo in pending queue (for Secretary) ──
+const _origLoadPendingQueue = loadPendingQueue;
+window.loadPendingQueue = async function() {
+    await _origLoadPendingQueue();
+
+    const el = document.getElementById('pendingQueueDisplay');
+    if (!el) return;
+
+    // Re-fetch pending rows with photos
+    const today = todayDate();
+    const { data: rows } = await db.from('attendance_pending')
+        .select('id, lrn, photo_data, scan_type, scanned_time_in, scanned_time_out, full_name')
+        .eq('date', today)
+        .eq('approval_status', 'Pending')
+        .not('photo_data', 'is', null);
+
+    if (!rows?.length) return;
+
+    rows.forEach(r => {
+        const row = document.getElementById(`pending-row-${r.id}`);
+        if (!row || row.querySelector('.log-photo-thumb')) return;
+        const leftDiv = row.querySelector('.pending-item-left');
+        if (!leftDiv) return;
+
+        const time = r.scan_type === 'IN' ? r.scanned_time_in : r.scanned_time_out;
+        const thumb = document.createElement('img');
+        thumb.className = 'log-photo-thumb';
+        thumb.src = r.photo_data;
+        thumb.title = `📸 Photo — ${r.full_name}`;
+        thumb.style.cssText = 'margin-top:6px;width:44px;height:44px;';
+        thumb.onclick = (e) => { e.stopPropagation(); showPhotoLightbox(r.photo_data, r.full_name, time, r.scan_type); };
+        leftDiv.appendChild(thumb);
+    });
+};
