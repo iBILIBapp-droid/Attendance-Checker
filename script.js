@@ -744,7 +744,7 @@ async function loadLogs(role) {
         return `<div class="log-item" id="log-row-${log.id}">
             <div>
                 <span class="log-name">${log.full_name}</span>
-                <span class="log-meta">IN: ${log.time_in || '—'} &nbsp;|&nbsp; OUT: ${log.time_out || '—'} &nbsp;|&nbsp; ID: ${log.lrn} ${sectionTag}</span>
+                <span class="log-meta">IN: ${log.time_in || '—'} &nbsp;|&nbsp; OUT: ${log.time_out || '—'}${log.time_in_2 ? ` &nbsp;|&nbsp; <span style="color:#7c3aed;font-size:9px;">S2 IN: ${log.time_in_2} OUT: ${log.time_out_2 || '—'}</span>` : ''} &nbsp;|&nbsp; ID: ${log.lrn} ${sectionTag}</span>
             </div>
             <div style="display:flex;align-items:center;gap:6px;">
                 ${forceBtn}
@@ -792,60 +792,45 @@ async function forceStudentTimeOut(logId, name, role) {
 }
 
 // Teacher's own time in/out
+// ── Teacher / Adviser / Secretary own time ────
+// All staff attendance now goes through attendance_pending
+// (same flow as students) so Secretary can confirm.
+// Teachers and Advisers are allowed 2 sessions per day
+// (e.g. morning + afternoon).  Secretary gets 1 session.
+//
+// Session logic:
+//   Session 1: time_in / time_out
+//   Session 2: time_in_2 / time_out_2  (teachers/advisers only)
+//
+// "Record Time In" automatically targets the right session:
+//   • If session 1 has no time_in yet   → use session 1
+//   • If session 1 is complete (has out) → use session 2
+//   • If both sessions used              → block
+//
+// "Record Time Out" automatically targets the open session.
+
 async function loadTeacherOwnTime() {
     if (!currentUser) return;
     const today = todayDate();
     const { data } = await db.from('attendance_logs')
         .select('*').eq('lrn', currentUser.id).eq('date', today).eq('person_type', 'teacher').maybeSingle();
-    document.getElementById('tchTimeIn').textContent = data?.time_in || '—';
-    document.getElementById('tchTimeOut').textContent = data?.time_out || '—';
-    document.getElementById('tchStatus').textContent = data?.status || '—';
+    document.getElementById('tchTimeIn').textContent   = data?.time_in    || '—';
+    document.getElementById('tchTimeOut').textContent  = data?.time_out   || '—';
+    document.getElementById('tchTimeIn2').textContent  = data?.time_in_2  || '—';
+    document.getElementById('tchTimeOut2').textContent = data?.time_out_2 || '—';
+    document.getElementById('tchStatus').textContent   = data?.status     || '—';
 }
 
 async function teacherSelfTimeIn() {
     if (!currentUser) return;
-    const today = todayDate();
-    const { data: existing } = await db.from('attendance_logs')
-        .select('*').eq('lrn', currentUser.id).eq('date', today).eq('person_type', 'teacher').maybeSingle();
-    const msgEl = document.getElementById('teacherTimeMsg');
-    if (existing) {
-        setStatus('teacherTimeMsg', 'warning', 'ALREADY TIMED IN', `You checked in at ${existing.time_in}`);
-        msgEl.style.display = 'flex'; return;
-    }
-    const time = nowTime();
-    const status = getAttendanceStatus();
-    const { error } = await db.from('attendance_logs').insert({
-        lrn: currentUser.id, full_name: currentUser.name,
-        date: today, time_in: time, status, person_type: 'teacher'
-    });
-    if (error) { setStatus('teacherTimeMsg', 'error', 'ERROR', error.message); msgEl.style.display = 'flex'; return; }
-    setStatus('teacherTimeMsg', 'success', `TIME IN — ${status}`, `Recorded at ${time}`);
-    msgEl.style.display = 'flex';
+    await _staffSelfTimeIn(currentUser.id, currentUser.name, 'teacher', 'teacherTimeMsg', 2);
     loadTeacherOwnTime();
-    showToast(`Time In recorded at ${time}`);
 }
 
 async function teacherSelfTimeOut() {
     if (!currentUser) return;
-    const today = todayDate();
-    const { data: existing } = await db.from('attendance_logs')
-        .select('*').eq('lrn', currentUser.id).eq('date', today).eq('person_type', 'teacher').maybeSingle();
-    const msgEl = document.getElementById('teacherTimeMsg');
-    if (!existing) {
-        setStatus('teacherTimeMsg', 'error', 'NO TIME IN RECORD', 'Please time in first.');
-        msgEl.style.display = 'flex'; return;
-    }
-    if (existing.time_out) {
-        setStatus('teacherTimeMsg', 'warning', 'ALREADY TIMED OUT', `You left at ${existing.time_out}`);
-        msgEl.style.display = 'flex'; return;
-    }
-    const time = nowTime();
-    const { error } = await db.from('attendance_logs').update({ time_out: time }).eq('id', existing.id);
-    if (error) { setStatus('teacherTimeMsg', 'error', 'ERROR', error.message); msgEl.style.display = 'flex'; return; }
-    setStatus('teacherTimeMsg', 'success', 'TIME OUT RECORDED', `Recorded at ${time}`);
-    msgEl.style.display = 'flex';
+    await _staffSelfTimeOut(currentUser.id, currentUser.name, 'teacher', 'teacherTimeMsg');
     loadTeacherOwnTime();
-    showToast(`Time Out recorded at ${time}`);
 }
 
 // ── TEACHER: Force Time Out All Remaining Students ───────────────────────────
@@ -2035,47 +2020,219 @@ async function loadAdviserOwnTime() {
     const today = todayDate();
     const { data } = await db.from('attendance_logs')
         .select('*').eq('lrn', currentUser.id).eq('date', today).eq('person_type', 'teacher').maybeSingle();
-    document.getElementById('advTimeIn').textContent = data?.time_in || '—';
-    document.getElementById('advTimeOut').textContent = data?.time_out || '—';
-    document.getElementById('advStatus').textContent = data?.status || '—';
+    document.getElementById('advTimeIn').textContent   = data?.time_in    || '—';
+    document.getElementById('advTimeOut').textContent  = data?.time_out   || '—';
+    document.getElementById('advTimeIn2').textContent  = data?.time_in_2  || '—';
+    document.getElementById('advTimeOut2').textContent = data?.time_out_2 || '—';
+    document.getElementById('advStatus').textContent   = data?.status     || '—';
 }
 
 async function adviserSelfTimeIn() {
     if (!currentUser) return;
-    const today = todayDate();
-    const { data: existing } = await db.from('attendance_logs')
-        .select('*').eq('lrn', currentUser.id).eq('date', today).eq('person_type', 'teacher').maybeSingle();
-    const msgEl = document.getElementById('advTimeMsg');
-    if (existing) { setStatus('advTimeMsg', 'warning', 'ALREADY TIMED IN', `Checked in at ${existing.time_in}`); msgEl.style.display = 'flex'; return; }
-    const time = nowTime(); const status = getAttendanceStatus();
-    const { error } = await db.from('attendance_logs').insert({ lrn: currentUser.id, full_name: currentUser.name, date: today, time_in: time, status, person_type: 'teacher' });
-    if (error) { setStatus('advTimeMsg', 'error', 'ERROR', error.message); msgEl.style.display = 'flex'; return; }
-    setStatus('advTimeMsg', 'success', `TIME IN — ${status}`, `Recorded at ${time}`);
-    msgEl.style.display = 'flex'; loadAdviserOwnTime(); showToast(`Time In recorded at ${time}`);
+    await _staffSelfTimeIn(currentUser.id, currentUser.name, 'teacher', 'advTimeMsg', 2);
+    loadAdviserOwnTime();
 }
 
 async function adviserSelfTimeOut() {
     if (!currentUser) return;
-    const today = todayDate();
-    const { data: existing } = await db.from('attendance_logs')
-        .select('*').eq('lrn', currentUser.id).eq('date', today).eq('person_type', 'teacher').maybeSingle();
-    const msgEl = document.getElementById('advTimeMsg');
-    if (!existing) { setStatus('advTimeMsg', 'error', 'NO TIME IN RECORD', 'Please time in first.'); msgEl.style.display = 'flex'; return; }
-    if (existing.time_out) { setStatus('advTimeMsg', 'warning', 'ALREADY TIMED OUT', `You left at ${existing.time_out}`); msgEl.style.display = 'flex'; return; }
-    const time = nowTime();
-    const { error } = await db.from('attendance_logs').update({ time_out: time }).eq('id', existing.id);
-    if (error) { setStatus('advTimeMsg', 'error', 'ERROR', error.message); msgEl.style.display = 'flex'; return; }
-    setStatus('advTimeMsg', 'success', 'TIME OUT RECORDED', `Recorded at ${time}`);
-    msgEl.style.display = 'flex'; loadAdviserOwnTime(); showToast(`Time Out recorded at ${time}`);
+    await _staffSelfTimeOut(currentUser.id, currentUser.name, 'teacher', 'advTimeMsg');
+    loadAdviserOwnTime();
 }
 
 // ══════════════════════════════════════════════
 //  SECRETARY ROLE — Logsheets only
 // ══════════════════════════════════════════════
+// ══════════════════════════════════════════════
+//  SHARED STAFF ATTENDANCE ENGINE
+//  Used by teacher, adviser, secretary.
+//  Routes through attendance_pending so Secretary
+//  can confirm — original scan time preserved.
+//  maxSessions: 2 for teachers/advisers, 1 for secretary
+// ══════════════════════════════════════════════
+async function _staffSelfTimeIn(lrn, name, personType, msgElId, maxSessions = 1) {
+    const msgEl = document.getElementById(msgElId);
+    if (!msgEl) return;
+    const today = todayDate();
+    const time  = nowTime();
+    const status = getAttendanceStatus();
+
+    // Fetch confirmed log row
+    const { data: log } = await db.from('attendance_logs')
+        .select('*').eq('lrn', lrn).eq('date', today).eq('person_type', personType).maybeSingle();
+
+    // Fetch any still-pending time-in rows
+    const { data: pendingIns } = await db.from('attendance_pending')
+        .select('*').eq('lrn', lrn).eq('date', today).eq('person_type', personType)
+        .eq('scan_type', 'IN').eq('approval_status', 'Pending');
+
+    // ── Determine which session to open ──
+    let targetSession = null; // 1 or 2
+
+    if (!log) {
+        // No confirmed record yet
+        if (pendingIns?.length > 0) {
+            setStatus(msgElId, 'warning', 'SCAN PENDING APPROVAL',
+                `Your time-in at ${pendingIns[0].scanned_time_in} is awaiting Secretary confirmation.`);
+            msgEl.style.display = 'flex'; return;
+        }
+        targetSession = 1;
+    } else {
+        // Has a confirmed record — check sessions
+        const s1Open = log.time_in  && !log.time_out;   // session 1 active (no out yet)
+        const s1Done = log.time_in  && log.time_out;     // session 1 complete
+        const s2Open = log.time_in_2 && !log.time_out_2; // session 2 active
+        const s2Done = log.time_in_2 && log.time_out_2;  // session 2 complete
+
+        if (maxSessions >= 2) {
+            if (!s1Done) {
+                // Session 1 is still open — must time out first
+                setStatus(msgElId, 'warning', 'COMPLETE SESSION 1 FIRST',
+                    `You are still clocked in for Session 1 (in at ${log.time_in}). Record Time Out before starting Session 2.`);
+                msgEl.style.display = 'flex'; return;
+            }
+            if (s1Done && !log.time_in_2) {
+                // Check pending session-2 IN
+                const pend2 = pendingIns?.find(p => p.session_num === 2);
+                if (pend2) {
+                    setStatus(msgElId, 'warning', 'SCAN PENDING APPROVAL',
+                        `Session 2 time-in at ${pend2.scanned_time_in} is awaiting confirmation.`);
+                    msgEl.style.display = 'flex'; return;
+                }
+                targetSession = 2;
+            } else if (s2Open || s2Done) {
+                setStatus(msgElId, 'warning', 'MAX SESSIONS REACHED',
+                    `You have already used both sessions today.`);
+                msgEl.style.display = 'flex'; return;
+            }
+        } else {
+            // maxSessions = 1 (secretary)
+            setStatus(msgElId, 'warning', 'ALREADY TIMED IN',
+                `You checked in at ${log.time_in}.`);
+            msgEl.style.display = 'flex'; return;
+        }
+    }
+
+    // ── Insert pending row ──
+    const { error } = await db.from('attendance_pending').insert({
+        lrn, full_name: name, date: today,
+        scanned_time_in: time,
+        computed_status: status,
+        person_type: personType,
+        approval_status: 'Pending',
+        scan_type: 'IN',
+        session_num: targetSession
+    });
+
+    if (error) {
+        setStatus(msgElId, 'error', 'ERROR', error.message);
+        msgEl.style.display = 'flex'; return;
+    }
+
+    const sessionLabel = targetSession === 2 ? ' (Session 2)' : '';
+    setStatus(msgElId, 'info', `⏳ PENDING APPROVAL`,
+        `Time In${sessionLabel} at ${time} (${status}) — awaiting Secretary confirmation`);
+    msgEl.style.display = 'flex';
+    showToast(`⏳ Time In${sessionLabel} pending — ${time}`);
+}
+
+async function _staffSelfTimeOut(lrn, name, personType, msgElId) {
+    const msgEl = document.getElementById(msgElId);
+    if (!msgEl) return;
+    const today = todayDate();
+    const time  = nowTime();
+
+    const { data: log } = await db.from('attendance_logs')
+        .select('*').eq('lrn', lrn).eq('date', today).eq('person_type', personType).maybeSingle();
+
+    // Check pending time-out rows
+    const { data: pendingOuts } = await db.from('attendance_pending')
+        .select('*').eq('lrn', lrn).eq('date', today).eq('person_type', personType)
+        .eq('scan_type', 'OUT').eq('approval_status', 'Pending');
+
+    if (!log) {
+        setStatus(msgElId, 'error', 'NO TIME IN RECORD', 'Please record Time In first.');
+        msgEl.style.display = 'flex'; return;
+    }
+
+    // ── Find which session to close ──
+    let targetSession = null;
+    let targetLogId   = log.id;
+
+    if (log.time_in_2 && !log.time_out_2) {
+        // Session 2 is open
+        if (pendingOuts?.find(p => p.session_num === 2)) {
+            setStatus(msgElId, 'warning', 'TIME OUT PENDING', 'Session 2 time-out is awaiting Secretary confirmation.');
+            msgEl.style.display = 'flex'; return;
+        }
+        targetSession = 2;
+    } else if (log.time_in && !log.time_out) {
+        // Session 1 is open
+        if (pendingOuts?.find(p => p.session_num === 1)) {
+            setStatus(msgElId, 'warning', 'TIME OUT PENDING', 'Session 1 time-out is awaiting Secretary confirmation.');
+            msgEl.style.display = 'flex'; return;
+        }
+        targetSession = 1;
+    } else {
+        setStatus(msgElId, 'warning', 'NO OPEN SESSION', 'All sessions are already closed for today.');
+        msgEl.style.display = 'flex'; return;
+    }
+
+    const now = new Date();
+    const h = now.getHours();
+    let updatedStatus = log.status;
+    if (h >= 12 && h < 16) updatedStatus = 'Half Day';
+
+    const { error } = await db.from('attendance_pending').insert({
+        lrn, full_name: name, date: today,
+        scanned_time_out: time,
+        computed_status: updatedStatus,
+        person_type: personType,
+        approval_status: 'Pending',
+        scan_type: 'OUT',
+        log_id: targetLogId,
+        session_num: targetSession
+    });
+
+    if (error) {
+        setStatus(msgElId, 'error', 'ERROR', error.message);
+        msgEl.style.display = 'flex'; return;
+    }
+
+    const sessionLabel = targetSession === 2 ? ' (Session 2)' : '';
+    setStatus(msgElId, 'info', `⏳ TIME OUT PENDING`,
+        `Time Out${sessionLabel} at ${time} — awaiting Secretary confirmation`);
+    msgEl.style.display = 'flex';
+    showToast(`⏳ Time Out${sessionLabel} pending — ${time}`);
+}
+
+// ── Secretary self time functions ─────────────
+async function loadSecretaryOwnTime() {
+    if (!currentUser) return;
+    const today = todayDate();
+    const { data } = await db.from('attendance_logs')
+        .select('*').eq('lrn', currentUser.id).eq('date', today).eq('person_type', 'teacher').maybeSingle();
+    document.getElementById('secTimeIn').textContent  = data?.time_in  || '—';
+    document.getElementById('secTimeOut').textContent = data?.time_out || '—';
+    document.getElementById('secStatus').textContent  = data?.status   || '—';
+}
+
+async function secretarySelfTimeIn() {
+    if (!currentUser) return;
+    await _staffSelfTimeIn(currentUser.id, currentUser.name, 'teacher', 'secTimeMsg', 1);
+    loadSecretaryOwnTime();
+}
+
+async function secretarySelfTimeOut() {
+    if (!currentUser) return;
+    await _staffSelfTimeOut(currentUser.id, currentUser.name, 'teacher', 'secTimeMsg');
+    loadSecretaryOwnTime();
+}
+
 async function onSecretaryTabChange(tabId) {
     stopPendingAutoRefresh();
     if (tabId === 'secLogsTab') loadLogs('secretary');
     if (tabId === 'secPendingTab') startPendingAutoRefresh();
+    if (tabId === 'secMyTimeTab') loadSecretaryOwnTime();
 }
 
 // ── PENDING APPROVAL QUEUE ────────────────────
@@ -2117,13 +2274,18 @@ async function loadPendingQueue() {
         const isIn = p.scan_type === 'IN';
         const scannedTime = isIn ? p.scanned_time_in : p.scanned_time_out;
         const statusClass = p.computed_status === 'On Time' ? 'ontime' : p.computed_status === 'Late' ? 'late' : 'halfday';
+        const isTeacher = p.person_type === 'teacher';
+        const roleTag = isTeacher
+            ? `<span class="log-section-tag" style="background:#fef3c7;color:#92400e;">👩‍🏫 TEACHER</span>`
+            : `<span class="log-section-tag" style="background:#e0f2fe;color:#0369a1;">🎓 STUDENT</span>`;
         return `
         <div class="pending-item" id="pending-row-${p.id}">
             <div class="pending-item-left">
-                <div class="pending-scan-type ${isIn ? 'type-in' : 'type-out'}">${isIn ? '⏰ TIME IN' : '🚶 TIME OUT'}</div>
+                <div class="pending-scan-type ${isIn ? 'type-in' : 'type-out'}">${isIn ? '⏰ TIME IN' : '🚶 TIME OUT'}${p.session_num === 2 ? ' <span style="font-size:8px;background:rgba(255,255,255,0.3);padding:1px 5px;border-radius:3px;">S2</span>' : ''}</div>
                 <div class="pending-name">${p.full_name}</div>
                 <div class="pending-meta">
                     <span class="pending-lrn">ID: ${p.lrn}</span>
+                    ${roleTag}
                     ${p.section ? `<span class="log-section-tag">${p.section}</span>` : ''}
                 </div>
                 <div class="pending-time-row">
@@ -2159,36 +2321,52 @@ async function confirmPending(pendingId) {
         if (fetchErr) throw fetchErr;
         if (!p) throw new Error('Pending record not found');
 
-        if (p.scan_type === 'IN') {
-            // Check if already confirmed (race condition guard)
-            const { data: alreadyIn } = await db.from('attendance_logs')
-                .select('id').eq('lrn', p.lrn).eq('date', p.date).eq('person_type', p.person_type).maybeSingle();
-            if (alreadyIn) throw new Error(`${p.full_name} already has a confirmed time-in`);
+        const session = p.session_num || 1; // default to session 1
 
-            // Insert to attendance_logs using the ORIGINAL scanned time
-            const { error: insErr } = await db.from('attendance_logs').insert({
-                lrn: p.lrn,
-                full_name: p.full_name,
-                date: p.date,
-                time_in: p.scanned_time_in,   // ← original scanned time, unchanged
-                status: p.computed_status,
-                person_type: p.person_type,
-                section: p.section || null
-            });
-            if (insErr) throw insErr;
+        if (p.scan_type === 'IN') {
+            const { data: existingLog } = await db.from('attendance_logs')
+                .select('*').eq('lrn', p.lrn).eq('date', p.date).eq('person_type', p.person_type).maybeSingle();
+
+            if (session === 1) {
+                // Session 1 — insert a new log row (or guard duplicate)
+                if (existingLog) throw new Error(`${p.full_name} already has a confirmed time-in`);
+                const { error: insErr } = await db.from('attendance_logs').insert({
+                    lrn: p.lrn,
+                    full_name: p.full_name,
+                    date: p.date,
+                    time_in: p.scanned_time_in,
+                    status: p.computed_status,
+                    person_type: p.person_type,
+                    section: p.section || null
+                });
+                if (insErr) throw insErr;
+            } else {
+                // Session 2 — update existing log row's time_in_2
+                if (!existingLog) throw new Error(`${p.full_name} has no confirmed Session 1 yet`);
+                if (existingLog.time_in_2) throw new Error(`${p.full_name} already has Session 2 confirmed`);
+                const { error: updErr } = await db.from('attendance_logs')
+                    .update({ time_in_2: p.scanned_time_in })
+                    .eq('id', existingLog.id);
+                if (updErr) throw updErr;
+            }
 
         } else if (p.scan_type === 'OUT') {
-            // Update the confirmed log record
             const logId = p.log_id;
             if (!logId) throw new Error('No linked log ID for time-out confirmation');
 
-            const { error: updErr } = await db.from('attendance_logs')
-                .update({
-                    time_out: p.scanned_time_out,   // ← original scanned time, unchanged
-                    status: p.computed_status
-                })
-                .eq('id', logId);
-            if (updErr) throw updErr;
+            if (session === 2) {
+                // Write to time_out_2
+                const { error: updErr } = await db.from('attendance_logs')
+                    .update({ time_out_2: p.scanned_time_out, status: p.computed_status })
+                    .eq('id', logId);
+                if (updErr) throw updErr;
+            } else {
+                // Session 1 — normal time_out
+                const { error: updErr } = await db.from('attendance_logs')
+                    .update({ time_out: p.scanned_time_out, status: p.computed_status })
+                    .eq('id', logId);
+                if (updErr) throw updErr;
+            }
         }
 
         // Mark pending as confirmed

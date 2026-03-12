@@ -214,8 +214,10 @@
                     <div class="my-time-card">
                         <div class="my-time-label">TODAY'S ATTENDANCE</div>
                         <div id="teacherOwnTime" class="own-time-display">
-                            <div class="time-row"><span>Time In</span><strong id="tchTimeIn">—</strong></div>
-                            <div class="time-row"><span>Time Out</span><strong id="tchTimeOut">—</strong></div>
+                            <div class="time-row"><span>Session 1 In</span><strong id="tchTimeIn">—</strong></div>
+                            <div class="time-row"><span>Session 1 Out</span><strong id="tchTimeOut">—</strong></div>
+                            <div class="time-row"><span>Session 2 In</span><strong id="tchTimeIn2">—</strong></div>
+                            <div class="time-row"><span>Session 2 Out</span><strong id="tchTimeOut2">—</strong></div>
                             <div class="time-row"><span>Status</span><strong id="tchStatus">—</strong></div>
                         </div>
                         <div class="own-time-btns">
@@ -304,6 +306,7 @@
                     <span id="pendingTabBadge" class="pending-tab-badge" style="display:none;"></span>
                 </button>
                 <button class="tab-btn" data-tab="secLogsTab">📋 LOGSHEETS</button>
+                <button class="tab-btn" data-tab="secMyTimeTab">⏰ MY TIME</button>
                 <button class="tab-btn" data-tab="secExportTab">📤 EXPORT</button>
             </nav>
             <div class="app-body">
@@ -345,6 +348,23 @@
                     </div>
                     <div id="secLogsDisplay" class="logs-list"></div>
                 </div>
+                <!-- My Time Tab -->
+                <div id="secMyTimeTab" class="tab-pane">
+                    <div class="my-time-card">
+                        <div class="my-time-label">TODAY'S ATTENDANCE</div>
+                        <div class="own-time-display">
+                            <div class="time-row"><span>Time In</span><strong id="secTimeIn">—</strong></div>
+                            <div class="time-row"><span>Time Out</span><strong id="secTimeOut">—</strong></div>
+                            <div class="time-row"><span>Status</span><strong id="secStatus">—</strong></div>
+                        </div>
+                        <div class="own-time-btns">
+                            <button class="btn-primary" onclick="secretarySelfTimeIn()">⏰ RECORD TIME IN</button>
+                            <button class="btn-secondary" onclick="secretarySelfTimeOut()">🚶 RECORD TIME OUT</button>
+                        </div>
+                        <div id="secTimeMsg" class="status-box info" style="margin-top:15px;display:none;"></div>
+                    </div>
+                </div>
+
                 <!-- Export Tab -->
                 <div id="secExportTab" class="tab-pane">
                     <div class="upload-panel-title" style="padding:18px 18px 10px;">📤 DOWNLOAD LOGSHEET</div>
@@ -471,8 +491,10 @@
                     <div class="my-time-card">
                         <div class="my-time-label">TODAY'S ATTENDANCE</div>
                         <div class="own-time-display">
-                            <div class="time-row"><span>Time In</span><strong id="advTimeIn">—</strong></div>
-                            <div class="time-row"><span>Time Out</span><strong id="advTimeOut">—</strong></div>
+                            <div class="time-row"><span>Session 1 In</span><strong id="advTimeIn">—</strong></div>
+                            <div class="time-row"><span>Session 1 Out</span><strong id="advTimeOut">—</strong></div>
+                            <div class="time-row"><span>Session 2 In</span><strong id="advTimeIn2">—</strong></div>
+                            <div class="time-row"><span>Session 2 Out</span><strong id="advTimeOut2">—</strong></div>
                             <div class="time-row"><span>Status</span><strong id="advStatus">—</strong></div>
                         </div>
                         <div class="own-time-btns">
